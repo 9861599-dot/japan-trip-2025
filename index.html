@@ -81,10 +81,9 @@
         const { useState, useEffect, useRef } = React;
 
         // =========================================
-        // 1. 設定 Firebase Config (包含自動偵測)
+        // 1. 設定 Firebase Config
         // =========================================
         const getFirebaseConfig = () => {
-            // 優先嘗試使用環境變數 (讓你在預覽視窗不會報錯)
             try {
                 if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                     return JSON.parse(__firebase_config);
@@ -93,14 +92,13 @@
                 console.log("Not in preview mode or config invalid");
             }
             
-            // 🔴 如果你要部署到 Netlify，請在這裡填入你的 Firebase 設定 🔴
             return {
-                    apiKey: "AIzaSyCpOfvR92qEkDHDZio8jZ4VR-tru2MScSQ",
-                    authDomain: "japan-trip-2025-5f3a3.firebaseapp.com",
-                    projectId: "japan-trip-2025-5f3a3",
-                    storageBucket: "japan-trip-2025-5f3a3.firebasestorage.app",
-                    messagingSenderId: "828851638958",
-                    appId: "1:828851638958:web:59bad47902fe08671b933f"
+                apiKey: "AIzaSyCpOfvR92qEkDHDZio8jZ4VR-tru2MScSQ",
+                authDomain: "japan-trip-2025-5f3a3.firebaseapp.com",
+                projectId: "japan-trip-2025-5f3a3",
+                storageBucket: "japan-trip-2025-5f3a3.firebasestorage.app",
+                messagingSenderId: "828851638958",
+                appId: "1:828851638958:web:59bad47902fe08671b933f"
             };
         };
 
@@ -109,120 +107,106 @@
         const db = getFirestore(app);
         const auth = getAuth(app);
 
-        // =========================================
-        // 修正路徑: 遵守 Public Data 規則以解決權限錯誤
-        // 路徑結構: artifacts/{appId}/public/data/{collectionName}/{documentId}
-        // =========================================
+        // 路徑: artifacts/{appId}/public/data/trips/shared_japan_2025
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        // 使用陣列來定義路徑，方便 doc() 函數使用
-        // 我們將資料存放在 'trips' 集合中的 'shared_japan_2025' 文件
         const TRIP_DOC_PATH = ['artifacts', appId, 'public', 'data', 'trips', 'shared_japan_2025'];
 
         // =========================================
-        // 原始資料結構 (預設值)
+        // 新版資料結構 (根據使用者上傳的 CSV 整合)
         // =========================================
         const defaultItinerary = [
             {
-                id: 'day1', date: '5/10 (六)', title: '桃園 → 小松 → 金澤',
+                id: 'day1', date: '5/10 (日)', title: '桃園 → 小松 → 金澤',
                 location: '金澤',
-                weather: { icon: 'fa-sun', text: '晴時多雲 18°C', alert: false },
+                weather: { icon: 'fa-plane', text: '出發日', alert: false },
                 events: [
-                    { id: 'e1-1', type: 'transport', time: '10:25', title: 'IT 252 桃園起飛', desc: '虎航 IT 252，前往小松機場 (KMQ)', location: '桃園國際機場' },
-                    { id: 'e1-2', type: 'transport', time: '14:00', title: '抵達小松機場', desc: '辦理入境，領取行李。', location: '小松機場' },
-                    { id: 'e1-3', type: 'transport', time: '15:00', title: '租車 / 巴士', desc: '前往金澤市區 (車程約 40-50 分鐘)', location: '小松機場租車櫃台' },
-                    { id: 'e1-4', type: 'accommodation', time: '16:00', title: '飯店 Check-in', desc: '入住金澤市區飯店，放置行李', location: '金澤市' },
-                    { id: 'e1-5', type: 'sight', time: '17:00', title: '金澤站「鼓門」', desc: '金澤地標，世界最美車站之一，夜景必拍。', location: '金澤車站 鼓門' },
-                    { id: 'e1-6', type: 'food', time: '18:00', title: '金澤晚餐', desc: '車站周邊美食巡禮', location: '金澤百番街', highlights: [{type: 'must-eat', text: '壽司 まいもん'}, {type: 'must-eat', text: '金澤咖哩'}] },
+                    { id: 'e1-1', type: 'transport', time: '12:10', title: 'IT 252 起飛', desc: '桃園 → 小松機場 (16:05 抵達)。', location: '桃園國際機場' },
+                    { id: 'e1-2', type: 'transport', time: '17:00', title: '機場巴士 → 金澤', desc: '出關後左轉搭車。約40分。', location: '小松機場', cost: 1150 },
+                    { id: 'e1-3', type: 'food', time: '18:30', title: '金澤晚餐', desc: '金澤車站周邊美食。', location: '金澤車站' },
+                    { id: 'e1-4', type: 'accommodation', time: '20:00', title: '住宿: 金澤大酒店', desc: '或 MYSTAYS 金澤精品酒店。', location: 'Kanazawa Hotel', bookingCode: '5949989585-PIN:3738', cost: 60554, note: '5/8前可取消' },
                 ]
             },
             {
-                id: 'day2', date: '5/11 (日)', title: '金澤古都巡禮',
+                id: 'day2', date: '5/11 (一)', title: '金澤古都一日遊',
                 location: '金澤',
-                weather: { icon: 'fa-cloud-sun', text: '多雲 20°C', alert: false },
+                weather: { icon: 'fa-sun', text: '適合拍照', alert: false },
                 events: [
-                    { id: 'e2-1', type: 'sight', time: '09:00', title: '兼六園', desc: '日本三大名園之一，日式庭園造景巔峰。', location: '兼六園', highlights: [{type: 'highlight', text: '徽軫燈籠'}] },
-                    { id: 'e2-2', type: 'sight', time: '10:30', title: '金澤城公園', desc: '就在兼六園對面，參觀五十間長屋。', location: '金澤城公園' },
-                    { id: 'e2-3', type: 'sight', time: '12:00', title: '21 世紀美術館', desc: '著名的「泳池」裝置藝術', location: '金澤21世紀美術館' },
-                    { id: 'e2-4', type: 'food', time: '13:30', title: '午餐', desc: '近江町市場海鮮或周邊茶屋', location: '近江町市場', highlights: [{type: 'must-eat', text: '海鮮丼'}] },
-                    { id: 'e2-5', type: 'sight', time: '15:00', title: '東茶屋街', desc: '保留江戶時代風情，金箔冰淇淋發源地。', location: '東茶屋街', highlights: [{type: 'must-eat', text: '金箔冰淇淋'}] },
-                    { id: 'e2-6', type: 'food', time: '18:30', title: '晚餐：金澤關東煮', desc: '金澤特色關東煮 (赤玉本店 / 黑百合)', location: '赤玉本店', highlights: [{type: 'must-eat', text: '車麩、赤卷'}] }
+                    { id: 'e2-1', type: 'transport', time: '09:00', title: 'Loop Bus 一日券', desc: 'JR 金澤站購買。', location: '金澤車站', cost: 600 },
+                    { id: 'e2-2', type: 'sight', time: '09:30', title: '兼六園 & 金澤城', desc: '建議由桂坂口進入，早上光線最美。', location: '兼六園' },
+                    { id: 'e2-3', type: 'food', time: '12:00', title: '午餐: 近江町市場', desc: '必吃海鮮丼 (山さん壽司、もりもり寿司)。', location: '近江町市場' },
+                    { id: 'e2-4', type: 'sight', time: '14:00', title: '東茶屋街', desc: '箔一金箔冰淇淋、久連波和菓子。', location: '東茶屋街' },
+                    { id: 'e2-5', type: 'sight', time: '16:00', title: '長町武家屋敷', desc: '古色古香的武士街道。', location: '長町武家屋敷跡' },
+                    { id: 'e2-6', type: 'food', time: '18:00', title: '晚餐: 金澤咖哩', desc: '濃郁黑咖哩。', location: 'Go Go Curry' },
+                    { id: 'e2-7', type: 'accommodation', time: '20:00', title: '住宿: 金澤續住', desc: '同第一晚。', location: 'Kanazawa Hotel' },
                 ]
             },
             {
-                id: 'day3', date: '5/12 (一)', title: '合掌村 → 高山',
+                id: 'day3', date: '5/12 (二)', title: '合掌村 → 飛驒高山',
                 location: '高山',
-                weather: { icon: 'fa-cloud', text: '陰天 15°C', alert: false },
+                weather: { icon: 'fa-car', text: '自駕日', alert: false },
                 events: [
-                    { id: 'e3-1', type: 'transport', time: '09:00', title: '前往白川鄉', desc: '自駕或巴士，車程約 1小時 15分。', location: '白川鄉合掌村' },
-                    { id: 'e3-2', type: 'sight', time: '10:30', title: '白川鄉合掌村', desc: '世界遺產童話村落。', location: '白川鄉', highlights: [{type: 'highlight', text: '城山展望台'}, {type: 'must-eat', text: '五平餅'}] },
-                    { id: 'e3-3', type: 'food', time: '12:30', title: '午餐：朴葉味噌燒', desc: '飛驒地區特色料理。', location: '白川鄉' },
-                    { id: 'e3-4', type: 'transport', time: '14:00', title: '前往高山', desc: '車程約 50 分鐘。', location: '高山市' },
-                    { id: 'e3-5', type: 'sight', time: '15:00', title: '高山老街', desc: '「飛驒的小京都」，保留古老街景。', location: '高山三町筋', highlights: [{type: 'must-eat', text: '飛驒牛握壽司'}, {type: 'must-eat', text: '高山布丁'}] },
-                    { id: 'e3-6', type: 'accommodation', time: '17:00', title: '高山住宿 Check-in', desc: '推薦入住高山站周邊，方便移動。', location: '高山站' },
-                    { id: 'e3-7', type: 'food', time: '18:30', title: '晚餐：飛驒牛燒肉', desc: '日本頂級和牛體驗。', location: '高山市', highlights: [{type: 'must-eat', text: '丸明 / 味藏天國'}] }
+                    { id: 'e3-1', type: 'transport', time: '09:00', title: '租車出發', desc: '自駕前往白川鄉。', location: '金澤車站租車' },
+                    { id: 'e3-2', type: 'sight', time: '10:30', title: '白川鄉合掌村', desc: '世界遺產童話村落。', location: '白川鄉' },
+                    { id: 'e3-3', type: 'food', time: '12:30', title: '午餐: 合掌村', desc: '五平餅、蕎麥麵。', location: '白川鄉' },
+                    { id: 'e3-4', type: 'transport', time: '14:30', title: '前往高山', desc: '前往飛驒高山古街。', location: '高山三町筋' },
+                    { id: 'e3-5', type: 'sight', time: '15:30', title: '高山古街', desc: '飛驒牛壽司、味增串。', location: '高山老街' },
+                    { id: 'e3-6', type: 'food', time: '18:00', title: '晚餐: 飛驒牛一頭家', desc: '頂級飛驒牛燒肉。', location: '飛驒牛一頭家' },
+                    { id: 'e3-7', type: 'accommodation', time: '20:00', title: '住宿: Residence 高山', desc: '或 fav Hide 高山。訂單: 6171736740-PIN:1772', location: 'Residence Hotel Takayama Station', bookingCode: '6171736740', cost: 55869 },
                 ]
             },
             {
-                id: 'day4', date: '5/13 (二)', title: '高山朝市 → 富山',
+                id: 'day4', date: '5/13 (三)', title: '高山朝市 → 富山',
                 location: '富山',
-                weather: { icon: 'fa-sun', text: '晴天 22°C', alert: false },
+                weather: { icon: 'fa-cloud-sun', text: '移動日', alert: false },
                 events: [
-                    { id: 'e4-1', type: 'sight', time: '08:00', title: '宮川朝市', desc: '日本三大朝市之一，沿著河邊的熱鬧市集。', location: '宮川朝市' },
-                    { id: 'e4-2', type: 'sight', time: '10:00', title: '高山陣屋', desc: '日本唯一現存的代官所。', location: '高山陣屋' },
-                    { id: 'e4-3', type: 'transport', time: '13:00', title: '前往富山', desc: '車程約 1.5 小時。', location: '富山市' },
-                    { id: 'e4-4', type: 'sight', time: '15:00', title: '富山市立玻璃美術館', desc: '建築大師隈研吾設計，光影極美。', location: '富山市玻璃美術館' },
-                    { id: 'e4-5', type: 'sight', time: '16:30', title: '富岩運河環水公園', desc: '擁有「世界最美星巴克」，適合散步看夕陽。', location: '富岩運河環水公園' },
-                    { id: 'e4-6', type: 'food', time: '18:00', title: '晚餐：白蝦料理', desc: '富山灣的寶石「白蝦」。', location: '富山車站', highlights: [{type: 'must-eat', text: '白蝦天丼'}] }
+                    { id: 'e4-1', type: 'sight', time: '08:00', title: '宮川朝市', desc: '清晨散步，逛市集。', location: '宮川朝市' },
+                    { id: 'e4-2', type: 'transport', time: '14:00', title: '前往富山', desc: 'JR高山本線 (約1.5小時)。', location: '富山車站', cost: 2860 },
+                    { id: 'e4-3', type: 'accommodation', time: '16:00', title: '住宿: 東橫INN 富山站', desc: '新幹線口2號店。訂單: 5361206-7', location: 'Toyoko Inn Toyama-eki Shinkansen-guchi No.2', bookingCode: '5361206-7', cost: 40870 },
+                    { id: 'e4-4', type: 'food', time: '18:00', title: '富山晚餐', desc: '白蝦料理、富山黑拉麵。', location: '富山車站' },
                 ]
             },
             {
-                id: 'day5', date: '5/14 (三)', title: '穿越立山黑部',
+                id: 'day5', date: '5/14 (四)', title: '穿越立山黑部',
                 location: '長野',
-                weather: { icon: 'fa-snowflake', text: '山區低溫 5°C', alert: true },
+                weather: { icon: 'fa-snowflake', text: '高山氣候', alert: true },
                 events: [
-                    { id: 'e5-1', type: 'transport', time: '07:00', title: '前往立山站', desc: '車輛需請代駕運送到扇澤，人直接穿越。', location: '立山站' },
-                    { id: 'e5-2', type: 'sight', time: '09:00', title: '美女平 / 室堂', desc: '轉乘高原巴士。室堂平看雪壁 (視季節) 或御庫裏池。', location: '室堂' },
-                    { id: 'e5-3', type: 'transport', time: '11:00', title: '大觀峰 / 黑部平', desc: '搭乘空中纜車，無支柱設計視野無死角。', location: '大觀峰' },
-                    { id: 'e5-4', type: 'sight', time: '13:00', title: '黑部水庫', desc: '日本最大拱形水庫，步行穿越壩頂。', location: '黑部水庫' },
-                    { id: 'e5-5', type: 'transport', time: '15:00', title: '抵達扇澤 / 取車', desc: '穿越完成，抵達長野側。', location: '扇澤站' },
-                    { id: 'e5-6', type: 'transport', time: '16:30', title: '前往長野住宿', desc: '車程約 1.5 小時。', location: '長野市' },
-                    { id: 'e5-7', type: 'food', time: '18:30', title: '晚餐：信州蕎麥麵', desc: '長野名物。', location: '長野車站', highlights: [{type: 'must-eat', text: '蕎麥麵'}] }
+                    { id: 'e5-1', type: 'transport', time: '07:00', title: '★ 寄行李', desc: '將大行李寄往長野/東京。', location: '富山車站' },
+                    { id: 'e5-2', type: 'transport', time: '08:00', title: '電鐵 富山→立山站', desc: '約1小時。', location: '立山站', cost: 1230 },
+                    { id: 'e5-3', type: 'sight', time: '10:00', title: '立山黑部穿越', desc: '美女平、室堂(雪壁)、大觀峰、黑部水庫。', location: '室堂' },
+                    { id: 'e5-4', type: 'transport', time: '15:00', title: '扇澤 → 長野站', desc: 'ALPICO巴士，約1小時40分。', location: '扇澤站', cost: 2000 },
+                    { id: 'e5-5', type: 'accommodation', time: '18:00', title: '住宿: 長野日航酒店', desc: '或 Sotetsu Fresa。訂單: 6128676866-PIN:0175', location: 'Hotel Jal City Nagano', bookingCode: '6128676866', cost: 36402 },
                 ]
             },
             {
-                id: 'day6', date: '5/15 (四)', title: '長野 → 輕井澤 → 東京',
+                id: 'day6', date: '5/15 (五)', title: '長野 → 東京',
                 location: '東京',
-                weather: { icon: 'fa-sun', text: '晴天 23°C', alert: false },
+                weather: { icon: 'fa-city', text: '都市觀光', alert: false },
                 events: [
-                    { id: 'e6-1', type: 'sight', time: '09:00', title: '善光寺', desc: '日本著名古剎，長野的精神中心。', location: '善光寺' },
-                    { id: 'e6-2', type: 'transport', time: '11:00', title: '前往輕井澤', desc: '避暑勝地。', location: '輕井澤' },
-                    { id: 'e6-3', type: 'sight', time: '12:00', title: '輕井澤 Outlet', desc: '森林中的大型購物中心，午餐在此解決。', location: '輕井澤王子購物廣場', highlights: [{type: 'must-buy', text: '運動品牌/精品'}] },
-                    { id: 'e6-4', type: 'sight', time: '15:00', title: '舊輕井澤銀座通', desc: '購買果醬、麵包伴手禮。', location: '舊輕井澤銀座通', highlights: [{type: 'must-buy', text: 'SAWAYA 果醬'}] },
-                    { id: 'e6-5', type: 'transport', time: '17:00', title: '前往東京', desc: '還車，轉為大眾運輸模式。', location: '上野站' },
-                    { id: 'e6-6', type: 'accommodation', time: '19:00', title: '東京住宿 Check-in', desc: '建議住上野或淺草，往返機場方便。', location: '上野' }
+                    { id: 'e6-1', type: 'transport', time: '09:00', title: '新幹線 → 東京', desc: '北陸新幹線，約1.5小時。', location: '東京車站', cost: 8000 },
+                    { id: 'e6-2', type: 'sight', time: '13:00', title: '淺草雷門 & 晴空塔', desc: '東京必遊地標。', location: '雷門' },
+                    { id: 'e6-3', type: 'food', time: '18:00', title: '東京晚餐', desc: '上野/淺草美食。', location: '上野' },
+                    { id: 'e6-4', type: 'accommodation', time: '20:00', title: '住宿: 上野第一都市酒店', desc: '訂單: 5038002965-PIN:6928', location: 'Ueno First City Hotel', bookingCode: '5038002965', cost: 63812 },
                 ]
             },
             {
-                id: 'day7', date: '5/16 (五)', title: '東京自由行',
+                id: 'day7', date: '5/16 (六)', title: '東京自由行',
                 location: '東京',
-                weather: { icon: 'fa-cloud-sun', text: '晴時多雲 24°C', alert: false },
+                weather: { icon: 'fa-bag-shopping', text: '購物日', alert: false },
                 events: [
-                    { id: 'e7-1', type: 'sight', time: '10:00', title: '東京市區自由活動', desc: '依興趣選擇路線。', location: '東京' },
-                    { id: 'e7-2', type: 'activity', time: 'Option', title: '澀谷 / Shibuya Sky', desc: '潮流時尚、展望台。', location: '澀谷 SCRAMBLE SQUARE', highlights: [{type: 'highlight', text: 'Shibuya Sky'}] },
-                    { id: 'e7-3', type: 'activity', time: 'Option', title: '淺草 / 晴空塔', desc: '下町風情與現代地標。', location: '雷門', highlights: [{type: 'must-eat', text: '淺草炸肉餅'}] },
-                    { id: 'e7-4', type: 'food', time: '18:00', title: '晚餐：豪華大餐', desc: '燒肉、壽喜燒或居酒屋，慶祝旅程最後一晚。', location: '東京' }
+                    { id: 'e7-1', type: 'activity', time: '10:00', title: '方案1: 上野動物園', desc: '阿美橫町+淺草雷門。', location: '上野動物園' },
+                    { id: 'e7-2', type: 'activity', time: '10:00', title: '方案2: 晴空塔', desc: '東京晴空塔+押上美食街。', location: '東京晴空塔' },
+                    { id: 'e7-3', type: 'activity', time: '10:00', title: '方案3: 台場一日遊', desc: '樂高探索中心、DiverCity、鋼彈。', location: '台場' },
+                    { id: 'e7-4', type: 'accommodation', time: '20:00', title: '住宿: 成田東武機場酒店', desc: '移動至機場附近。訂單: 5068249636-PIN:5297', location: 'Narita Tobu Hotel Airport', bookingCode: '5068249636', cost: 36086 },
                 ]
             },
             {
-                id: 'day8', date: '5/17 (六)', title: '東京 → 桃園',
-                location: '桃園',
-                weather: { icon: 'fa-plane', text: '返家', alert: false },
+                id: 'day8', date: '5/17 (日)', title: '成田 → 高雄',
+                location: '成田',
+                weather: { icon: 'fa-plane-departure', text: '回程', alert: false },
                 events: [
-                    { id: 'e8-1', type: 'activity', time: '09:00', title: '最後採買', desc: '上野二木之菓子零食採買。', location: '二木之菓子' },
-                    { id: 'e8-2', type: 'transport', time: '11:00', title: '前往成田機場', desc: '搭乘 Skyliner (約 41 分鐘)。', location: '京成上野站' },
-                    { id: 'e8-3', type: 'transport', time: '12:00', title: '機場報到', desc: '成田機場 T2，逛免稅店。', location: '成田機場第二航廈' },
-                    { id: 'e8-4', type: 'transport', time: '13:30', title: 'IT 252 起飛', desc: '虎航 IT 252 (預計)', location: '成田機場' },
-                    { id: 'e8-5', type: 'transport', time: '16:40', title: '平安返家', desc: '抵達高雄(或桃園)', location: '高雄小港機場' }
+                    { id: 'e8-1', type: 'transport', time: '09:00', title: '前往機場', desc: '飯店接駁車或電車。', location: '成田機場' },
+                    { id: 'e8-2', type: 'activity', time: '10:00', title: '機場採買', desc: '最後衝刺伴手禮。', location: '成田機場免稅店' },
+                    { id: 'e8-3', type: 'transport', time: '13:30', title: 'IT 281 起飛', desc: '成田 → 高雄 (16:40 抵達)。', location: '成田機場第二航廈' },
                 ]
             }
         ];
@@ -255,54 +239,55 @@
         };
 
         const EditModal = ({ event, onClose, onSave }) => {
+            const [title, setTitle] = useState(event.title || '');
+            const [time, setTime] = useState(event.time || '');
+            const [location, setLocation] = useState(event.location || '');
             const [bookingCode, setBookingCode] = useState(event.bookingCode || '');
             const [cost, setCost] = useState(event.cost || '');
             const [note, setNote] = useState(event.note || '');
 
             return (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-                    <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl border-4 border-pink-200 animate-[bounce_0.2s_ease-out]">
+                    <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl border-4 border-pink-200 animate-[bounce_0.2s_ease-out] max-h-[90vh] overflow-y-auto">
                         <h3 className="text-xl font-bold text-pink-500 mb-4 flex items-center gap-2">
-                            <i className="fa-solid fa-pen-to-square"></i> 編輯資訊
+                            <i className="fa-solid fa-pen-to-square"></i> 編輯行程
                         </h3>
-                        <div className="space-y-4">
+                        <div className="space-y-3">
+                             <div>
+                                <label className="block text-xs font-bold text-slate-400 mb-1 ml-1">時間</label>
+                                <input type="text" value={time} onChange={(e) => setTime(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 focus:border-pink-400" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 mb-1 ml-1">標題 (行程/餐廳)</label>
+                                <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 focus:border-pink-400 font-bold text-slate-700" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 mb-1 ml-1">導航地點 (給 Google Maps)</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-2 text-slate-400"><i className="fa-solid fa-map-pin"></i></span>
+                                    <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl pl-8 pr-3 py-2 focus:border-pink-400" />
+                                </div>
+                            </div>
+                            <div className="border-t border-dashed border-slate-200 my-2"></div>
                             <div>
                                 <label className="block text-xs font-bold text-slate-400 mb-1 ml-1">訂位代碼 / 票號</label>
-                                <input 
-                                    type="text" 
-                                    value={bookingCode}
-                                    onChange={(e) => setBookingCode(e.target.value)}
-                                    placeholder="例如: XYZ123"
-                                    className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-pink-400 transition-colors"
-                                />
+                                <input type="text" value={bookingCode} onChange={(e) => setBookingCode(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 focus:border-pink-400" />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-slate-400 mb-1 ml-1">費用 (車資/門票)</label>
                                 <div className="relative">
                                     <span className="absolute left-3 top-2 text-slate-400">¥</span>
-                                    <input 
-                                        type="number" 
-                                        value={cost}
-                                        onChange={(e) => setCost(e.target.value)}
-                                        placeholder="0"
-                                        className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl pl-7 pr-3 py-2 focus:outline-none focus:border-pink-400 transition-colors"
-                                    />
+                                    <input type="number" value={cost} onChange={(e) => setCost(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl pl-7 pr-3 py-2 focus:border-pink-400" />
                                 </div>
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-slate-400 mb-1 ml-1">備註筆記</label>
-                                <textarea 
-                                    value={note}
-                                    onChange={(e) => setNote(e.target.value)}
-                                    placeholder="寫點什麼..."
-                                    rows="3"
-                                    className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-pink-400 transition-colors resize-none"
-                                ></textarea>
+                                <textarea value={note} onChange={(e) => setNote(e.target.value)} rows="2" className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 focus:border-pink-400 resize-none"></textarea>
                             </div>
                         </div>
                         <div className="flex gap-3 mt-6">
                             <button onClick={onClose} className="flex-1 py-2.5 rounded-xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors">取消</button>
-                            <button onClick={() => onSave({ bookingCode, cost, note })} className="flex-1 py-2.5 rounded-xl font-bold text-white bg-pink-400 hover:bg-pink-500 shadow-md shadow-pink-200 transition-colors">儲存</button>
+                            <button onClick={() => onSave({ title, time, location, bookingCode, cost, note })} className="flex-1 py-2.5 rounded-xl font-bold text-white bg-pink-400 hover:bg-pink-500 shadow-md shadow-pink-200 transition-colors">儲存</button>
                         </div>
                     </div>
                 </div>
