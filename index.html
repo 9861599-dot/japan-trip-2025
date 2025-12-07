@@ -8,7 +8,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     
-    <title>Chiikawa Trip v2.4</title>
+    <title>Chiikawa Trip v2.5</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#fff1f2">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1908/1908344.png">
@@ -87,12 +87,11 @@
         // 🚑 PWA 殺手程式碼 v3 (安全版 - 防止報錯)
         // =========================================
         if ('serviceWorker' in navigator) {
-            // 使用 try-catch 包裹，避免在不支援的環境下(如 iframe)報錯導致白畫面
             try {
                 navigator.serviceWorker.getRegistrations().then(function(registrations) {
                     for(let registration of registrations) {
                         registration.unregister().then(function() {
-                            console.log('Service Worker 已強制註銷 (v2.4)');
+                            console.log('Service Worker 已強制註銷 (v2.5)');
                         }).catch(err => console.warn('SW Unregister failed:', err));
                     }
                 }).catch(err => {
@@ -102,7 +101,6 @@
                 console.warn('Service Worker access denied or invalid state:', e);
             }
 
-            // 嘗試清除快取儲存
             if ('caches' in window) {
                 try {
                     caches.keys().then(function(names) {
@@ -146,6 +144,9 @@
         // 路徑: artifacts/{appId}/public/data/trips/shared_japan_2025
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const TRIP_DOC_PATH = ['artifacts', appId, 'public', 'data', 'trips', 'shared_japan_2025'];
+        
+        // 🌟 關鍵修改：更換儲存金鑰，強制讀取新資料
+        const LOCAL_STORAGE_KEY = 'trip_data_v2_5'; 
 
         // =========================================
         // 新版資料結構 (根據使用者上傳的 CSV 整合)
@@ -525,7 +526,7 @@
                         setIsLocalMode(true);
                         
                         // 本地模式：直接讀取 LocalStorage
-                        const savedData = localStorage.getItem('trip_data_local');
+                        const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
                         if (savedData) {
                             const data = JSON.parse(savedData);
                             setDays(data.days);
@@ -609,7 +610,7 @@
                 setDays(updatedDays);
 
                 if (isLocalMode) {
-                    localStorage.setItem('trip_data_local', JSON.stringify({ days: updatedDays, budget }));
+                    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ days: updatedDays, budget }));
                 } else {
                     try {
                         const docRef = doc(db, ...TRIP_DOC_PATH);
@@ -625,7 +626,7 @@
                 setBudget(newBudget);
                 
                 if (isLocalMode) {
-                    localStorage.setItem('trip_data_local', JSON.stringify({ days, budget: newBudget }));
+                    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ days, budget: newBudget }));
                 } else {
                     try {
                         const docRef = doc(db, ...TRIP_DOC_PATH);
@@ -651,10 +652,10 @@
 
             return (
                 <div className="max-w-md mx-auto min-h-screen bg-[#fff1f2] overflow-x-hidden">
-                    {/* v2.3 成功通知橫幅 (確保更新可見) */}
-                    <div className="bg-emerald-500 text-white text-xs font-bold text-center py-2 px-4 shadow-md animate-pulse sticky top-0 z-50">
+                    {/* v2.5 成功通知橫幅 (確保更新可見) */}
+                    <div className="bg-purple-500 text-white text-xs font-bold text-center py-2 px-4 shadow-md animate-pulse sticky top-0 z-50">
                         <i className="fa-solid fa-check-circle mr-1"></i>
-                        版本 2.3 更新成功！ (快取已清除)
+                        版本 2.5 更新成功！ (資料已重置)
                     </div>
 
                     <header className="sticky top-8 z-40 bg-[#fff1f2]/90 backdrop-blur-md px-5 py-4 border-b-2 border-pink-100 flex justify-between items-center shadow-sm">
@@ -687,7 +688,7 @@
                                     />
                                 ))}
                                 <div className="text-center text-pink-300 font-bold text-sm mt-8 mb-4">
-                                    ~ 旅途愉快 v2.3 ~
+                                    ~ 旅途愉快 v2.5 (重置版) ~
                                 </div>
                             </div>
                         ) : (
