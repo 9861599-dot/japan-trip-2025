@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chiikawa Trip</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#fff1f2">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1908/1908344.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- React & Babel -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Kosugi+Maru&family=M+PLUS+Rounded+1c:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'M PLUS Rounded 1c', 'Kosugi Maru', -apple-system, sans-serif;
+            background-color: #fff1f2;
+            background-image: radial-gradient(#fecdd3 1px, transparent 1px);
+            background-size: 20px 20px;
+            color: #475569;
+            -webkit-tap-highlight-color: transparent;
+            padding-bottom: 90px;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .app-card {
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 1.5rem;
+            box-shadow: 0 4px 15px rgba(251, 113, 133, 0.15);
+            border: 2px solid #fff;
+            overflow: hidden;
+            transition: transform 0.2s;
+            position: relative;
+        }
+        .app-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 6px;
+            background: linear-gradient(to right, #f9a8d4, #f472b6);
+        }
+
+        .tag-base { @apply px-2.5 py-1 rounded-full text-xs font-bold mr-1.5 mb-1 inline-block border-2 shadow-sm; }
+        .tag-food { @apply bg-orange-100 text-orange-600 border-orange-200; }
+        .tag-buy { @apply bg-rose-100 text-rose-600 border-rose-200; }
+        .tag-transport { @apply bg-blue-100 text-blue-600 border-blue-200; }
+        .tag-highlight { @apply bg-yellow-100 text-yellow-700 border-yellow-200; }
+        .tag-code { @apply bg-purple-100 text-purple-600 border-purple-200 font-mono tracking-wider; }
+        .tag-cost { @apply bg-emerald-100 text-emerald-600 border-emerald-200; }
+
+        .btn-cute {
+            @apply active:scale-95 transition-transform rounded-2xl font-bold shadow-md border-b-4 active:border-b-0 active:translate-y-1;
+        }
+
+        /* Loading 動畫 */
+        .chiikawa-bounce {
+            animation: bounce 1s infinite;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- 這裡改用 module 模式來支援 Firebase import -->
+    <script type="text/babel" data-type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc, collection } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+
+        const { useState, useEffect, useRef } = React;
+
+        // =========================================
+        // 1. 設定 Firebase Config (包含自動偵測)
+        // =========================================
+        const getFirebaseConfig = () => {
+            // 優先嘗試使用環境變數 (讓你在預覽視窗不會報錯)
+            try {
+                if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                    return JSON.parse(__firebase_config);
+                }
+            } catch (e) {
+                console.log("Not in preview mode or config invalid");
+            }
+            
+            // 🔴 如果你要部署到 Netlify，請在這裡填入你的 Firebase 設定 🔴
+            return {
+                    apiKey: "AIzaSyCpOfvR92qEkDHDZio8jZ4VR-tru2MScSQ",
+                    authDomain: "japan-trip-2025-5f3a3.firebaseapp.com",
+                    projectId: "japan-trip-2025-5f3a3",
+                    storageBucket: "japan-trip-2025-5f3a3.firebasestorage.app",
+                    messagingSenderId: "828851638958",
+                    appId: "1:828851638958:web:59bad47902fe08671b933f"
+            };
+        };
+
+        const firebaseConfig = getFirebaseConfig();
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        // =========================================
+        // 修正路徑: 遵守 Public Data 規則以解決權限錯誤
+        // 路徑結構: artifacts/{appId}/public/data/{collectionName}/{documentId}
+        // =========================================
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        // 使用陣列來定義路徑，方便 doc() 函數使用
+        // 我們將資料存放在 'trips' 集合中的 'shared_japan_2025' 文件
+        const TRIP_DOC_PATH = ['artifacts', appId, 'public', 'data', 'trips', 'shared_japan_2025'];
+
+        // =========================================
+        // 原始資料結構 (預設值)
+        // =========================================
+        const defaultItinerary = [
+            {
+                id: 'day1', date: '5/10 (六)', title: '桃園 → 小松 → 金澤',
+                location: '金澤',
+                weather: { icon: 'fa-sun', text: '晴時多雲 18°C', alert: false },
+                events: [
+                    { id: 'e1-1', type: 'transport', time: '10:25', title: 'IT 252 桃園起飛', desc: '虎航 IT 252，前往小松機場 (KMQ)', location: '桃園國際機場' },
+                    { id: 'e1-2', type: 'transport', time: '14:00', title: '抵達小松機場', desc: '辦理入境，領取行李。', location: '小松機場' },
+                    { id: 'e1-3', type: 'transport', time: '15:00', title: '租車 / 巴士', desc: '前往金澤市區 (車程約 40-50 分鐘)', location: '小松機場租車櫃台' },
+                    { id: 'e1-4', type: 'accommodation', time: '16:00', title: '飯店 Check-in', desc: '入住金澤市區飯店，放置行李', location: '金澤市' },
+                    { id: 'e1-5', type: 'sight', time: '17:00', title: '金澤站「鼓門」', desc: '金澤地標，世界最美車站之一，夜景必拍。', location: '金澤車站 鼓門' },
+                    { id: 'e1-6', type: 'food', time: '18:00', title: '金澤晚餐', desc: '車站周邊美食巡禮', location: '金澤百番街', highlights: [{type: 'must-eat', text: '壽司 まいもん'}, {type: 'must-eat', text: '金澤咖哩'}] },
+                ]
+            },
+            {
+                id: 'day2', date: '5/11 (日)', title: '金澤古都巡禮',
+                location: '金澤',
+                weather: { icon: 'fa-cloud-sun', text: '多雲 20°C', alert: false },
+                events: [
+                    { id: 'e2-1', type: 'sight', time: '09:00', title: '兼六園', desc: '日本三大名園之一，日式庭園造景巔峰。', location: '兼六園', highlights: [{type: 'highlight', text: '徽軫燈籠'}] },
+                    { id: 'e2-2', type: 'sight', time: '10:30', title: '金澤城公園', desc: '就在兼六園對面，參觀五十間長屋。', location: '金澤城公園' },
+                    { id: 'e2-3', type: 'sight', time: '12:00', title: '21 世紀美術館', desc: '著名的「泳池」裝置藝術', location: '金澤21世紀美術館' },
+                    { id: 'e2-4', type: 'food', time: '13:30', title: '午餐', desc: '近江町市場海鮮或周邊茶屋', location: '近江町市場', highlights: [{type: 'must-eat', text: '海鮮丼'}] },
+                    { id: 'e2-5', type: 'sight', time: '15:00', title: '東茶屋街', desc: '保留江戶時代風情，金箔冰淇淋發源地。', location: '東茶屋街', highlights: [{type: 'must-eat', text: '金箔冰淇淋'}] },
+                    { id: 'e2-6', type: 'food', time: '18:30', title: '晚餐：金澤關東煮', desc: '金澤特色關東煮 (赤玉本店 / 黑百合)', location: '赤玉本店', highlights: [{type: 'must-eat', text: '車麩、赤卷'}] }
+                ]
+            },
+            {
+                id: 'day3', date: '5/12 (一)', title: '合掌村 → 高山',
+                location: '高山',
+                weather: { icon: 'fa-cloud', text: '陰天 15°C', alert: false },
+                events: [
+                    { id: 'e3-1', type: 'transport', time: '09:00', title: '前往白川鄉', desc: '自駕或巴士，車程約 1小時 15分。', location: '白川鄉合掌村' },
+                    { id: 'e3-2', type: 'sight', time: '10:30', title: '白川鄉合掌村', desc: '世界遺產童話村落。', location: '白川鄉', highlights: [{type: 'highlight', text: '城山展望台'}, {type: 'must-eat', text: '五平餅'}] },
+                    { id: 'e3-3', type: 'food', time: '12:30', title: '午餐：朴葉味噌燒', desc: '飛驒地區特色料理。', location: '白川鄉' },
+                    { id: 'e3-4', type: 'transport', time: '14:00', title: '前往高山', desc: '車程約 50 分鐘。', location: '高山市' },
+                    { id: 'e3-5', type: 'sight', time: '15:00', title: '高山老街', desc: '「飛驒的小京都」，保留古老街景。', location: '高山三町筋', highlights: [{type: 'must-eat', text: '飛驒牛握壽司'}, {type: 'must-eat', text: '高山布丁'}] },
+                    { id: 'e3-6', type: 'accommodation', time: '17:00', title: '高山住宿 Check-in', desc: '推薦入住高山站周邊，方便移動。', location: '高山站' },
+                    { id: 'e3-7', type: 'food', time: '18:30', title: '晚餐：飛驒牛燒肉', desc: '日本頂級和牛體驗。', location: '高山市', highlights: [{type: 'must-eat', text: '丸明 / 味藏天國'}] }
+                ]
+            },
+            {
+                id: 'day4', date: '5/13 (二)', title: '高山朝市 → 富山',
+                location: '富山',
+                weather: { icon: 'fa-sun', text: '晴天 22°C', alert: false },
+                events: [
+                    { id: 'e4-1', type: 'sight', time: '08:00', title: '宮川朝市', desc: '日本三大朝市之一，沿著河邊的熱鬧市集。', location: '宮川朝市' },
+                    { id: 'e4-2', type: 'sight', time: '10:00', title: '高山陣屋', desc: '日本唯一現存的代官所。', location: '高山陣屋' },
+                    { id: 'e4-3', type: 'transport', time: '13:00', title: '前往富山', desc: '車程約 1.5 小時。', location: '富山市' },
+                    { id: 'e4-4', type: 'sight', time: '15:00', title: '富山市立玻璃美術館', desc: '建築大師隈研吾設計，光影極美。', location: '富山市玻璃美術館' },
+                    { id: 'e4-5', type: 'sight', time: '16:30', title: '富岩運河環水公園', desc: '擁有「世界最美星巴克」，適合散步看夕陽。', location: '富岩運河環水公園' },
+                    { id: 'e4-6', type: 'food', time: '18:00', title: '晚餐：白蝦料理', desc: '富山灣的寶石「白蝦」。', location: '富山車站', highlights: [{type: 'must-eat', text: '白蝦天丼'}] }
+                ]
+            },
+            {
+                id: 'day5', date: '5/14 (三)', title: '穿越立山黑部',
+                location: '長野',
+                weather: { icon: 'fa-snowflake', text: '山區低溫 5°C', alert: true },
+                events: [
+                    { id: 'e5-1', type: 'transport', time: '07:00', title: '前往立山站', desc: '車輛需請代駕運送到扇澤，人直接穿越。', location: '立山站' },
+                    { id: 'e5-2', type: 'sight', time: '09:00', title: '美女平 / 室堂', desc: '轉乘高原巴士。室堂平看雪壁 (視季節) 或御庫裏池。', location: '室堂' },
+                    { id: 'e5-3', type: 'transport', time: '11:00', title: '大觀峰 / 黑部平', desc: '搭乘空中纜車，無支柱設計視野無死角。', location: '大觀峰' },
+                    { id: 'e5-4', type: 'sight', time: '13:00', title: '黑部水庫', desc: '日本最大拱形水庫，步行穿越壩頂。', location: '黑部水庫' },
+                    { id: 'e5-5', type: 'transport', time: '15:00', title: '抵達扇澤 / 取車', desc: '穿越完成，抵達長野側。', location: '扇澤站' },
+                    { id: 'e5-6', type: 'transport', time: '16:30', title: '前往長野住宿', desc: '車程約 1.5 小時。', location: '長野市' },
+                    { id: 'e5-7', type: 'food', time: '18:30', title: '晚餐：信州蕎麥麵', desc: '長野名物。', location: '長野車站', highlights: [{type: 'must-eat', text: '蕎麥麵'}] }
+                ]
+            },
+            {
+                id: 'day6', date: '5/15 (四)', title: '長野 → 輕井澤 → 東京',
+                location: '東京',
+                weather: { icon: 'fa-sun', text: '晴天 23°C', alert: false },
+                events: [
+                    { id: 'e6-1', type: 'sight', time: '09:00', title: '善光寺', desc: '日本著名古剎，長野的精神中心。', location: '善光寺' },
+                    { id: 'e6-2', type: 'transport', time: '11:00', title: '前往輕井澤', desc: '避暑勝地。', location: '輕井澤' },
+                    { id: 'e6-3', type: 'sight', time: '12:00', title: '輕井澤 Outlet', desc: '森林中的大型購物中心，午餐在此解決。', location: '輕井澤王子購物廣場', highlights: [{type: 'must-buy', text: '運動品牌/精品'}] },
+                    { id: 'e6-4', type: 'sight', time: '15:00', title: '舊輕井澤銀座通', desc: '購買果醬、麵包伴手禮。', location: '舊輕井澤銀座通', highlights: [{type: 'must-buy', text: 'SAWAYA 果醬'}] },
+                    { id: 'e6-5', type: 'transport', time: '17:00', title: '前往東京', desc: '還車，轉為大眾運輸模式。', location: '上野站' },
+                    { id: 'e6-6', type: 'accommodation', time: '19:00', title: '東京住宿 Check-in', desc: '建議住上野或淺草，往返機場方便。', location: '上野' }
+                ]
+            },
+            {
+                id: 'day7', date: '5/16 (五)', title: '東京自由行',
+                location: '東京',
+                weather: { icon: 'fa-cloud-sun', text: '晴時多雲 24°C', alert: false },
+                events: [
+                    { id: 'e7-1', type: 'sight', time: '10:00', title: '東京市區自由活動', desc: '依興趣選擇路線。', location: '東京' },
+                    { id: 'e7-2', type: 'activity', time: 'Option', title: '澀谷 / Shibuya Sky', desc: '潮流時尚、展望台。', location: '澀谷 SCRAMBLE SQUARE', highlights: [{type: 'highlight', text: 'Shibuya Sky'}] },
+                    { id: 'e7-3', type: 'activity', time: 'Option', title: '淺草 / 晴空塔', desc: '下町風情與現代地標。', location: '雷門', highlights: [{type: 'must-eat', text: '淺草炸肉餅'}] },
+                    { id: 'e7-4', type: 'food', time: '18:00', title: '晚餐：豪華大餐', desc: '燒肉、壽喜燒或居酒屋，慶祝旅程最後一晚。', location: '東京' }
+                ]
+            },
+            {
+                id: 'day8', date: '5/17 (六)', title: '東京 → 桃園',
+                location: '桃園',
+                weather: { icon: 'fa-plane', text: '返家', alert: false },
+                events: [
+                    { id: 'e8-1', type: 'activity', time: '09:00', title: '最後採買', desc: '上野二木之菓子零食採買。', location: '二木之菓子' },
+                    { id: 'e8-2', type: 'transport', time: '11:00', title: '前往成田機場', desc: '搭乘 Skyliner (約 41 分鐘)。', location: '京成上野站' },
+                    { id: 'e8-3', type: 'transport', time: '12:00', title: '機場報到', desc: '成田機場 T2，逛免稅店。', location: '成田機場第二航廈' },
+                    { id: 'e8-4', type: 'transport', time: '13:30', title: 'IT 252 起飛', desc: '虎航 IT 252 (預計)', location: '成田機場' },
+                    { id: 'e8-5', type: 'transport', time: '16:40', title: '平安返家', desc: '抵達高雄(或桃園)', location: '高雄小港機場' }
+                ]
+            }
+        ];
+
+        // =========================================
+        // Components
+        // =========================================
+
+        const NavigateButton = ({ location }) => {
+            if (!location) return null;
+            const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
+            return (
+                <a href={mapsUrl} target="_blank" rel="noopener noreferrer" 
+                   className="inline-flex items-center gap-1.5 bg-sky-200 text-sky-700 text-xs px-3 py-1.5 rounded-2xl font-bold shadow-sm hover:bg-sky-300 active:scale-95 transition-all mt-2 no-underline border border-sky-300">
+                    <i className="fa-solid fa-location-arrow text-[0.7rem]"></i>
+                    <span>Go!</span>
+                </a>
+            );
+        };
+
+        const Tag = ({ type, text }) => {
+            let colorClass = "tag-base bg-slate-100 text-slate-600 border-slate-200";
+            if (type === 'must-eat') colorClass = "tag-base tag-food";
+            if (type === 'must-buy') colorClass = "tag-base tag-buy";
+            if (type === 'transport') colorClass = "tag-base tag-transport";
+            if (type === 'highlight') colorClass = "tag-base tag-highlight";
+            if (type === 'code') colorClass = "tag-base tag-code";
+            if (type === 'cost') colorClass = "tag-base tag-cost";
+            return <span className={colorClass}>{text}</span>;
+        };
+
+        const EditModal = ({ event, onClose, onSave }) => {
+            const [bookingCode, setBookingCode] = useState(event.bookingCode || '');
+            const [cost, setCost] = useState(event.cost || '');
+            const [note, setNote] = useState(event.note || '');
+
+            return (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+                    <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl border-4 border-pink-200 animate-[bounce_0.2s_ease-out]">
+                        <h3 className="text-xl font-bold text-pink-500 mb-4 flex items-center gap-2">
+                            <i className="fa-solid fa-pen-to-square"></i> 編輯資訊
+                        </h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 mb-1 ml-1">訂位代碼 / 票號</label>
+                                <input 
+                                    type="text" 
+                                    value={bookingCode}
+                                    onChange={(e) => setBookingCode(e.target.value)}
+                                    placeholder="例如: XYZ123"
+                                    className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-pink-400 transition-colors"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 mb-1 ml-1">費用 (車資/門票)</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-2 text-slate-400">¥</span>
+                                    <input 
+                                        type="number" 
+                                        value={cost}
+                                        onChange={(e) => setCost(e.target.value)}
+                                        placeholder="0"
+                                        className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl pl-7 pr-3 py-2 focus:outline-none focus:border-pink-400 transition-colors"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 mb-1 ml-1">備註筆記</label>
+                                <textarea 
+                                    value={note}
+                                    onChange={(e) => setNote(e.target.value)}
+                                    placeholder="寫點什麼..."
+                                    rows="3"
+                                    className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-pink-400 transition-colors resize-none"
+                                ></textarea>
+                            </div>
+                        </div>
+                        <div className="flex gap-3 mt-6">
+                            <button onClick={onClose} className="flex-1 py-2.5 rounded-xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors">取消</button>
+                            <button onClick={() => onSave({ bookingCode, cost, note })} className="flex-1 py-2.5 rounded-xl font-bold text-white bg-pink-400 hover:bg-pink-500 shadow-md shadow-pink-200 transition-colors">儲存</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const TimelineItem = ({ event, isLast, onEdit }) => {
+            let icon = 'fa-circle';
+            let iconColor = 'text-slate-400';
+            let iconBg = 'bg-slate-100';
+
+            switch(event.type) {
+                case 'transport': icon = 'fa-train-subway'; iconColor = 'text-blue-500'; iconBg = 'bg-blue-100'; break;
+                case 'food': icon = 'fa-utensils'; iconColor = 'text-orange-500'; iconBg = 'bg-orange-100'; break;
+                case 'sight': icon = 'fa-camera'; iconColor = 'text-teal-600'; iconBg = 'bg-teal-100'; break;
+                case 'accommodation': icon = 'fa-bed'; iconColor = 'text-purple-500'; iconBg = 'bg-purple-100'; break;
+                case 'activity': icon = 'fa-star'; iconColor = 'text-yellow-500'; iconBg = 'bg-yellow-100'; break;
+            }
+
+            return (
+                <div className="relative pl-4 pb-8 last:pb-2 group">
+                    {!isLast && <div className="absolute left-[27px] top-8 bottom-0 w-0.5 bg-slate-200 border-l-2 border-dotted border-slate-300 h-full"></div>}
+                    <div className="flex gap-4">
+                        <div className={`relative z-10 w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border-2 border-white shadow-md ${iconBg} ${iconColor}`}>
+                            <i className={`fa-solid ${icon} text-sm`}></i>
+                        </div>
+                        <div className="flex-1 pt-0.5">
+                            <div className="flex items-baseline justify-between mb-1">
+                                <span className="font-bold text-slate-700 text-lg">{event.title}</span>
+                                <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">{event.time}</span>
+                            </div>
+                            <div className="mb-2">
+                                {event.highlights && event.highlights.map((tag, idx) => (
+                                    <Tag key={`hl-${idx}`} type={tag.type} text={tag.text} />
+                                ))}
+                                {event.bookingCode && <Tag type="code" text={`代碼: ${event.bookingCode}`} />}
+                                {event.cost && <Tag type="cost" text={`¥${event.cost}`} />}
+                            </div>
+                            <p className="text-sm text-slate-500 leading-relaxed mb-2">{event.desc}</p>
+                            {event.note && (
+                                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 text-xs text-yellow-800 mb-2">
+                                    <i className="fa-regular fa-note-sticky mr-1"></i> {event.note}
+                                </div>
+                            )}
+                            <div className="flex items-center gap-2">
+                                <NavigateButton location={event.location} />
+                                <button onClick={() => onEdit(event)} className="mt-2 text-xs text-pink-400 font-bold px-3 py-1.5 rounded-2xl border border-pink-200 hover:bg-pink-50 transition-colors flex items-center gap-1">
+                                    <i className="fa-solid fa-pen"></i> 編輯
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const DayCard = ({ day, isExpanded, onToggle, onUpdateEvent }) => {
+            const [editingEvent, setEditingEvent] = useState(null);
+            const handleSave = (data) => {
+                onUpdateEvent(day.id, editingEvent.id, data);
+                setEditingEvent(null);
+            };
+
+            return (
+                <div className="app-card mb-5">
+                    <div onClick={onToggle} className="p-4 flex items-center justify-between cursor-pointer active:bg-pink-50/50">
+                        <div>
+                            <div className="text-xs font-bold text-pink-500 uppercase tracking-wider mb-0.5 flex items-center gap-1">
+                                <i className="fa-regular fa-calendar-check"></i> {day.date}
+                            </div>
+                            <h2 className="text-xl font-black text-slate-700">{day.title}</h2>
+                        </div>
+                        <div className={`w-8 h-8 rounded-full bg-pink-100 text-pink-500 flex items-center justify-center transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+                            <i className="fa-solid fa-chevron-down"></i>
+                        </div>
+                    </div>
+                    {isExpanded && (
+                        <div>
+                            <div className={`mx-4 px-4 py-3 rounded-xl flex items-center justify-between text-sm font-bold border-2 ${day.weather.alert ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-sky-50 text-sky-600 border-sky-100'}`}>
+                                <div className="flex items-center gap-2">
+                                    <i className={`fa-solid ${day.weather.icon} text-lg`}></i>
+                                    <span>{day.weather.text}</span>
+                                </div>
+                                {day.weather.alert && <span className="text-[10px] bg-amber-200 text-amber-800 px-2 py-1 rounded-full animate-bounce">注意</span>}
+                            </div>
+                            <div className="p-4">
+                                {day.events.map((event, index) => (
+                                    <TimelineItem key={event.id} event={event} isLast={index === day.events.length - 1} onEdit={setEditingEvent} />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {editingEvent && <EditModal event={editingEvent} onClose={() => setEditingEvent(null)} onSave={handleSave} />}
+                </div>
+            );
+        };
+
+        const ToolsView = ({ daysData, budgetData, onUpdateBudget }) => {
+            // 計算從行程中輸入的總費用
+            const itineraryCost = daysData.reduce((total, day) => {
+                return total + day.events.reduce((dayTotal, event) => {
+                    return dayTotal + (parseInt(event.cost) || 0);
+                }, 0);
+            }, 0);
+
+            const totalSpent = (budgetData?.manualSpent || 0) + itineraryCost;
+            const remaining = (budgetData?.total || 0) - totalSpent;
+            const percent = Math.min(100, (totalSpent / (budgetData?.total || 1)) * 100);
+
+            const updateManualSpent = (amount) => {
+                if (onUpdateBudget) {
+                    onUpdateBudget({ ...budgetData, manualSpent: (budgetData?.manualSpent || 0) + amount });
+                }
+            };
+
+            const resetBudget = () => {
+                if (onUpdateBudget) {
+                    onUpdateBudget({ ...budgetData, manualSpent: 0 });
+                }
+            };
+
+            return (
+                <div className="space-y-6 pb-24 p-4">
+                    <a href="https://www.vjw.digital.go.jp/" target="_blank" rel="noopener noreferrer" 
+                       className="block bg-gradient-to-r from-pink-400 to-rose-400 rounded-3xl p-1 shadow-lg transform active:scale-95 transition-transform">
+                        <div className="bg-white/10 rounded-[1.3rem] p-4 flex items-center justify-between text-white">
+                            <div>
+                                <div className="text-xs font-bold opacity-90 mb-1">入境必備</div>
+                                <div className="text-xl font-black">Visit Japan Web</div>
+                            </div>
+                            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+                                <i className="fa-solid fa-qrcode text-xl"></i>
+                            </div>
+                        </div>
+                    </a>
+
+                    <div className="app-card p-6 border-pink-100">
+                         <div className="flex justify-between items-center mb-4">
+                             <h3 className="text-lg font-black text-slate-700 flex items-center gap-2">
+                                <i className="fa-solid fa-coins text-yellow-400"></i> 預算錢包
+                             </h3>
+                             <button onClick={resetBudget} className="text-xs text-slate-400 hover:text-pink-500 font-bold bg-slate-100 px-2 py-1 rounded-lg">重置手動</button>
+                         </div>
+                        
+                        <div className="mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                            <div className="flex justify-between text-sm mb-2">
+                                <span className="text-slate-500 font-bold">已支出 (行程+手動)</span>
+                                <span className="font-black text-slate-700 text-lg">¥{totalSpent.toLocaleString()}</span>
+                            </div>
+                            <div className="w-full bg-slate-200 rounded-full h-4 overflow-hidden shadow-inner">
+                                <div className="bg-gradient-to-r from-yellow-300 to-orange-400 h-4 rounded-full transition-all duration-500 shadow-[0_2px_5px_rgba(251,146,60,0.5)]" style={{width: `${percent}%`}}></div>
+                            </div>
+                            <div className="text-right mt-1">
+                                <span className="text-xs text-slate-400 font-bold">剩餘 ¥{remaining.toLocaleString()}</span>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3">
+                            <button onClick={() => updateManualSpent(1000)} className="btn-cute py-3 bg-white text-slate-600 border-2 border-slate-100 hover:border-pink-200 hover:text-pink-500">+¥1,000</button>
+                            <button onClick={() => updateManualSpent(5000)} className="btn-cute py-3 bg-white text-slate-600 border-2 border-slate-100 hover:border-pink-200 hover:text-pink-500">+¥5,000</button>
+                            <button onClick={() => updateManualSpent(10000)} className="btn-cute py-3 bg-white text-slate-600 border-2 border-slate-100 hover:border-pink-200 hover:text-pink-500">+¥10,000</button>
+                        </div>
+                        <div className="mt-3 text-[10px] text-center text-slate-400">*編輯行程中的費用會自動加總喔！</div>
+                    </div>
+
+                    <div className="app-card p-6 border-blue-100">
+                        <h3 className="text-lg font-black text-slate-700 mb-4 flex items-center gap-2">
+                            <i className="fa-solid fa-phone-volume text-blue-400"></i> 緊急聯絡
+                        </h3>
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center py-2 border-b border-dashed border-slate-200">
+                                <span className="text-slate-500 text-sm font-bold">報警 / 救護車</span>
+                                <span className="font-mono font-black text-slate-700 text-lg">110 / 119</span>
+                            </div>
+                            <div className="flex justify-between items-center py-2 border-b border-dashed border-slate-200">
+                                <span className="text-slate-500 text-sm font-bold">駐日代表處</span>
+                                <span className="font-mono font-bold text-slate-700 select-all">+81-3-3280-7811</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('itinerary');
+            const [days, setDays] = useState(null); 
+            const [budget, setBudget] = useState({ total: 200000, manualSpent: 0 });
+            const [expandedDay, setExpandedDay] = useState('day1');
+            const [isLoading, setIsLoading] = useState(true);
+            const [isLocalMode, setIsLocalMode] = useState(false);
+
+            // 初始化與認證邏輯
+            useEffect(() => {
+                const initAuth = async () => {
+                    // 1. 檢查是否為本地開發/未填寫 Key 的狀態
+                    if (firebaseConfig.apiKey === "你的_API_KEY") {
+                        console.warn("偵測到未設定 Firebase Key，切換為本地模式 (Local Storage)。");
+                        setIsLocalMode(true);
+                        
+                        // 本地模式：直接讀取 LocalStorage
+                        const savedData = localStorage.getItem('trip_data_local');
+                        if (savedData) {
+                            const data = JSON.parse(savedData);
+                            setDays(data.days);
+                            setBudget(data.budget);
+                        } else {
+                            setDays(defaultItinerary);
+                        }
+                        setIsLoading(false);
+                        return;
+                    }
+
+                    // 2. 嘗試 Firebase 登入
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (error) {
+                        console.error("Firebase Auth 錯誤:", error);
+                        // 登入失敗也切回本地模式，避免畫面卡住
+                        setIsLocalMode(true);
+                        setDays(defaultItinerary);
+                        setIsLoading(false);
+                    }
+                };
+
+                initAuth();
+
+                // 3. 監聽登入狀態 (僅在非本地模式下)
+                const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+                    if (user && firebaseConfig.apiKey !== "你的_API_KEY") {
+                        // 使用正確的 Public Data 路徑: artifacts/appId/public/data/trips/shared_japan_2025
+                        const docRef = doc(db, ...TRIP_DOC_PATH);
+                        
+                        try {
+                            const docSnap = await getDoc(docRef);
+                            if (!docSnap.exists()) {
+                                await setDoc(docRef, {
+                                    days: defaultItinerary,
+                                    budget: { total: 200000, manualSpent: 0 }
+                                });
+                            }
+
+                            const unsubscribeSnapshot = onSnapshot(docRef, (doc) => {
+                                if (doc.exists()) {
+                                    const data = doc.data();
+                                    setDays(data.days);
+                                    if (data.budget) setBudget(data.budget);
+                                }
+                                setIsLoading(false);
+                            });
+                            return () => unsubscribeSnapshot();
+                        } catch (e) {
+                            console.error("Firestore 讀取錯誤:", e);
+                            setIsLocalMode(true);
+                            setDays(defaultItinerary);
+                            setIsLoading(false);
+                        }
+                    }
+                });
+
+                return () => unsubscribeAuth();
+            }, []);
+
+            // 更新事件
+            const handleUpdateEvent = async (dayId, eventId, newData) => {
+                if (!days) return;
+                
+                const updatedDays = days.map(day => {
+                    if (day.id !== dayId) return day;
+                    return {
+                        ...day,
+                        events: day.events.map(ev => {
+                            if (ev.id !== eventId) return ev;
+                            return { ...ev, ...newData };
+                        })
+                    };
+                });
+                
+                setDays(updatedDays);
+
+                if (isLocalMode) {
+                    localStorage.setItem('trip_data_local', JSON.stringify({ days: updatedDays, budget }));
+                } else {
+                    try {
+                        const docRef = doc(db, ...TRIP_DOC_PATH);
+                        await updateDoc(docRef, { days: updatedDays });
+                    } catch (e) {
+                        console.error("更新失敗:", e);
+                    }
+                }
+            };
+
+            // 更新預算
+            const handleUpdateBudget = async (newBudget) => {
+                setBudget(newBudget);
+                
+                if (isLocalMode) {
+                    localStorage.setItem('trip_data_local', JSON.stringify({ days, budget: newBudget }));
+                } else {
+                    try {
+                        const docRef = doc(db, ...TRIP_DOC_PATH);
+                        await updateDoc(docRef, { budget: newBudget });
+                    } catch (e) {
+                        console.error("預算更新失敗:", e);
+                    }
+                }
+            };
+
+            useEffect(() => {
+                window.scrollTo(0, 0);
+            }, [activeTab]);
+
+            if (isLoading) {
+                return (
+                    <div className="min-h-screen bg-[#fff1f2] flex flex-col items-center justify-center text-pink-400 gap-4">
+                        <i className="fa-solid fa-cloud text-6xl chiikawa-bounce"></i>
+                        <p className="font-bold text-lg">載入中...</p>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="max-w-md mx-auto min-h-screen bg-[#fff1f2] overflow-x-hidden">
+                    <header className="sticky top-0 z-40 bg-[#fff1f2]/90 backdrop-blur-md px-5 py-4 border-b-2 border-pink-100 flex justify-between items-center shadow-sm">
+                        <h1 className="text-2xl font-black text-slate-700 tracking-tight flex items-center gap-2">
+                            <span className="text-pink-500 text-3xl">✈️</span>
+                            <span>Japan<span className="text-pink-400">Trip</span></span>
+                        </h1>
+                        <div className="w-10 h-10 rounded-full bg-white border-2 border-pink-200 flex items-center justify-center shadow-sm">
+                            <i className="fa-solid fa-face-smile text-pink-400 text-xl"></i>
+                        </div>
+                    </header>
+
+                    {isLocalMode && (
+                        <div className="bg-orange-100 text-orange-700 text-xs font-bold text-center py-2 px-4">
+                            <i className="fa-solid fa-triangle-exclamation mr-1"></i>
+                            目前為預覽/離線模式 (資料僅存於此裝置)
+                        </div>
+                    )}
+
+                    <main className="pt-6">
+                        {activeTab === 'itinerary' ? (
+                            <div className="px-4">
+                                {days && days.map(day => (
+                                    <DayCard 
+                                        key={day.id} 
+                                        day={day} 
+                                        isExpanded={expandedDay === day.id}
+                                        onToggle={() => setExpandedDay(expandedDay === day.id ? null : day.id)}
+                                        onUpdateEvent={handleUpdateEvent}
+                                    />
+                                ))}
+                                <div className="text-center text-pink-300 font-bold text-sm mt-8 mb-4">
+                                    ~ 旅途愉快 ~
+                                </div>
+                            </div>
+                        ) : (
+                            <ToolsView daysData={days || []} budgetData={budget} onUpdateBudget={handleUpdateBudget} />
+                        )}
+                    </main>
+
+                    <nav className="fixed bottom-6 left-6 right-6 bg-white/95 backdrop-blur rounded-[2rem] shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-white z-50 max-w-[calc(28rem-3rem)] mx-auto">
+                        <div className="flex justify-around items-center h-16">
+                            <button 
+                                onClick={() => setActiveTab('itinerary')}
+                                className={`flex items-center gap-2 px-6 py-2 rounded-full transition-all duration-300 ${activeTab === 'itinerary' ? 'bg-pink-100 text-pink-500 font-bold' : 'text-slate-400 font-medium'}`}
+                            >
+                                <i className="fa-solid fa-map-location-dot text-lg"></i>
+                                {activeTab === 'itinerary' && <span>行程</span>}
+                            </button>
+                            <div className="w-px h-8 bg-slate-100"></div>
+                            <button 
+                                onClick={() => setActiveTab('tools')}
+                                className={`flex items-center gap-2 px-6 py-2 rounded-full transition-all duration-300 ${activeTab === 'tools' ? 'bg-pink-100 text-pink-500 font-bold' : 'text-slate-400 font-medium'}`}
+                            >
+                                <i className="fa-solid fa-suitcase text-lg"></i>
+                                {activeTab === 'tools' && <span>工具</span>}
+                            </button>
+                        </div>
+                    </nav>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
