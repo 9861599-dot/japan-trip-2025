@@ -8,7 +8,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     
-    <title>Chiikawa Trip v2.6</title>
+    <title>Chiikawa Trip v2.7</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#fff1f2">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1908/1908344.png">
@@ -77,14 +77,13 @@
 <body>
     <div id="root"></div>
 
-    <!-- 這裡改用 module 模式來支援 Firebase import -->
     <script type="text/babel" data-type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc, collection } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
         // =========================================
-        // 🚑 PWA 殺手程式碼 v3 (安全版)
+        // PWA Cache Cleanup
         // =========================================
         if ('serviceWorker' in navigator) {
             try {
@@ -107,7 +106,7 @@
         const { useState, useEffect, useRef } = React;
 
         // =========================================
-        // 1. 設定 Firebase Config
+        // 1. Firebase Config
         // =========================================
         const getFirebaseConfig = () => {
             try {
@@ -135,104 +134,110 @@
 
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const TRIP_DOC_PATH = ['artifacts', appId, 'public', 'data', 'trips', 'shared_japan_2025'];
-        const LOCAL_STORAGE_KEY = 'trip_data_v2_6'; 
+        const LOCAL_STORAGE_KEY = 'trip_data_v2_7'; 
 
         // =========================================
-        // 新版資料結構 (北陸東京 8 天)
+        // 新版資料結構 (v2.7 詳細版)
         // =========================================
         const defaultItinerary = [
             {
                 id: 'day1', date: '5/10 (日)', title: '桃園 → 小松 → 金澤',
                 location: '金澤',
-                weather: { icon: 'fa-plane', text: '出發日', alert: false },
+                weather: { icon: 'fa-plane', text: '涼爽舒適', temp: '14°C ~ 22°C', alert: false },
                 events: [
-                    { id: 'e1-1', type: 'transport', time: '12:10', title: 'IT 252 起飛', desc: '桃園 → 小松機場 (16:05 抵達)。', location: '桃園國際機場' },
-                    { id: 'e1-2', type: 'transport', time: '17:00', title: '機場巴士 → 金澤', desc: '出關後左轉搭車。約40分。', location: '小松機場', cost: 1150 },
-                    { id: 'e1-3', type: 'food', time: '18:30', title: '金澤晚餐', desc: '金澤車站周邊美食。', location: '金澤車站' },
-                    { id: 'e1-4', type: 'accommodation', time: '20:00', title: '住宿: 金澤大酒店', desc: '或 MYSTAYS 金澤精品酒店。', location: 'Kanazawa Hotel', bookingCode: '5949989585-PIN:3738', cost: 60554, note: '5/8前可取消' },
+                    { id: 'e1-1', type: 'transport', time: '12:10', title: 'IT 252 起飛', desc: '桃園 T1 → 小松機場 (16:05 抵達)。機上可先填寫入境卡。', location: '桃園國際機場' },
+                    { id: 'e1-2', type: 'transport', time: '17:00', title: '機場巴士 → 金澤', desc: '出關後左轉至巴士站。車程約40分，沿途欣賞田園風光。', location: '小松機場', cost: 1150 },
+                    { id: 'e1-3', type: 'food', time: '18:30', title: '晚餐: 金澤百番街', desc: '推薦:【8番拉麵 (8番らーめん)】北陸靈魂美食！\n★必點: 野菜拉麵(鹽味)、煎餃。湯頭清甜，蔬菜量大。', location: '金澤車站' },
+                    { id: 'e1-4', type: 'accommodation', time: '20:00', title: '住宿: 金澤大酒店', desc: '離車站走路 3 分鐘。大廳有免費咖啡。', location: 'Kanazawa Hotel', bookingCode: '5949989585-PIN:3738', cost: 60554, note: '5/8前可取消' },
                 ]
             },
             {
                 id: 'day2', date: '5/11 (一)', title: '金澤古都一日遊',
                 location: '金澤',
-                weather: { icon: 'fa-sun', text: '適合拍照', alert: false },
+                weather: { icon: 'fa-sun', text: '晴時多雲', temp: '15°C ~ 24°C', alert: false },
                 events: [
-                    { id: 'e2-1', type: 'transport', time: '09:00', title: 'Loop Bus 一日券', desc: 'JR 金澤站購買。', location: '金澤車站', cost: 600 },
-                    { id: 'e2-2', type: 'sight', time: '09:30', title: '兼六園 & 金澤城', desc: '建議由桂坂口進入，早上光線最美。', location: '兼六園' },
-                    { id: 'e2-3', type: 'food', time: '12:00', title: '午餐: 近江町市場', desc: '必吃海鮮丼 (山さん壽司、もりもり寿司)。', location: '近江町市場' },
-                    { id: 'e2-4', type: 'sight', time: '14:00', title: '東茶屋街', desc: '箔一金箔冰淇淋、久連波和菓子。', location: '東茶屋街' },
-                    { id: 'e2-5', type: 'sight', time: '16:00', title: '長町武家屋敷', desc: '古色古香的武士街道。', location: '長町武家屋敷跡' },
-                    { id: 'e2-6', type: 'food', time: '18:00', title: '晚餐: 金澤咖哩', desc: '濃郁黑咖哩。', location: 'Go Go Curry' },
-                    { id: 'e2-7', type: 'accommodation', time: '20:00', title: '住宿: 金澤續住', desc: '同第一晚。', location: 'Kanazawa Hotel' },
+                    { id: 'e2-1', type: 'transport', time: '09:00', title: 'Loop Bus 一日券', desc: 'JR 金澤站東口購買。可無限次搭乘城下町周遊巴士。', location: '金澤車站', cost: 600 },
+                    { id: 'e2-2', type: 'sight', time: '09:30', title: '兼六園 & 金澤城', desc: '日本三大名園之一。\n★必拍: 徽軫燈籠 (琴柱燈籠)、唐崎松。\n建議從桂坂口進入，早上光線最美，遊客較少。', location: '兼六園' },
+                    { id: 'e2-3', type: 'food', time: '12:00', title: '午餐: 近江町市場', desc: '金澤人的廚房！\n推薦:【山さん壽司】或【もりもり寿し(迴轉壽司)】\n★必點: 豪華海鮮丼(上有金箔)、喉黑魚(のどぐろ)握壽司。', location: '近江町市場' },
+                    { id: 'e2-4', type: 'sight', time: '14:00', title: '東茶屋街', desc: '江戶時代的茶屋建築群。\n★必吃: 箔一金箔冰淇淋 (整片金箔貼上去！)。\n★必逛: 久連波 (和菓子)、懷華樓 (參觀茶屋內部)。', location: '東茶屋街' },
+                    { id: 'e2-5', type: 'sight', time: '16:00', title: '長町武家屋敷', desc: '昔日武士居住的街道，土牆與石板路非常有氣氛。\n推薦參觀「野村家」，庭園設計非常精緻。', location: '長町武家屋敷跡' },
+                    { id: 'e2-6', type: 'food', time: '18:00', title: '晚餐: 金澤咖哩', desc: '推薦:【Go Go Curry (ゴーゴーカレー)】\n★必點: 炸豬排咖哩 (Loin Katsu Curry)。\n特色: 黑咖哩醬汁濃郁，用不鏽鋼盤裝盛，配上高麗菜絲。', location: 'Go Go Curry Kanazawa Station' },
+                    { id: 'e2-7', type: 'accommodation', time: '20:00', title: '住宿: 金澤續住', desc: '同第一晚。記得先整理部分行李準備寄送。', location: 'Kanazawa Hotel' },
                 ]
             },
             {
                 id: 'day3', date: '5/12 (二)', title: '合掌村 → 飛驒高山',
                 location: '高山',
-                weather: { icon: 'fa-car', text: '自駕日', alert: false },
+                weather: { icon: 'fa-cloud', text: '山區偏涼', temp: '12°C ~ 20°C', alert: false },
                 events: [
-                    { id: 'e3-1', type: 'transport', time: '09:00', title: '租車出發', desc: '自駕前往白川鄉。', location: '金澤車站租車' },
-                    { id: 'e3-2', type: 'sight', time: '10:30', title: '白川鄉合掌村', desc: '世界遺產童話村落。', location: '白川鄉' },
-                    { id: 'e3-3', type: 'food', time: '12:30', title: '午餐: 合掌村', desc: '五平餅、蕎麥麵。', location: '白川鄉' },
-                    { id: 'e3-4', type: 'transport', time: '14:30', title: '前往高山', desc: '前往飛驒高山古街。', location: '高山三町筋' },
-                    { id: 'e3-5', type: 'sight', time: '15:30', title: '高山古街', desc: '飛驒牛壽司、味增串。', location: '高山老街' },
-                    { id: 'e3-6', type: 'food', time: '18:00', title: '晚餐: 飛驒牛一頭家', desc: '頂級飛驒牛燒肉。', location: '飛驒牛一頭家' },
-                    { id: 'e3-7', type: 'accommodation', time: '20:00', title: '住宿: Residence 高山', desc: '或 fav Hide 高山。訂單: 6171736740-PIN:1772', location: 'Residence Hotel Takayama Station', bookingCode: '6171736740', cost: 55869 },
+                    { id: 'e3-1', type: 'transport', time: '09:00', title: '租車出發', desc: '自駕前往白川鄉 (約1小時15分)。山路好開但注意限速。', location: '金澤車站租車' },
+                    { id: 'e3-2', type: 'sight', time: '10:30', title: '白川鄉合掌村', desc: '世界遺產童話村落。\n★必拍: 城山天守閣展望台 (可搭接駁車上去)，俯瞰全村美景。\n參觀: 和田家 (最大合掌造建築)。', location: '白川鄉' },
+                    { id: 'e3-3', type: 'food', time: '12:30', title: '午餐: 合掌村小吃', desc: '推薦:【基太の庄】或【伊呂波】\n★必點: 朴葉味噌燒定食、五平餅 (核桃味噌醬烤米餅)、飛驒牛可樂餅。', location: '白川鄉' },
+                    { id: 'e3-4', type: 'transport', time: '14:30', title: '前往高山', desc: '開車約 50 分鐘。前往飛驒高山古街。', location: '高山三町筋' },
+                    { id: 'e3-5', type: 'sight', time: '15:30', title: '高山古街 (三町通)', desc: '保留江戶時代風貌的老街。\n★必吃: 飛驒牛握壽司 (坂口屋/こって牛)、飛驒牛串燒。\n★必買: 猿寶寶 (Sarubobo) 玩偶。', location: '高山老街' },
+                    { id: 'e3-6', type: 'food', time: '18:00', title: '晚餐: 飛驒牛燒肉', desc: '推薦:【味藏天國】或【丸明】\n★必點: 飛驒牛拼盤 (A5等級)、牛舌。\n肉質入口即化，建議先訂位！', location: '味藏天國' },
+                    { id: 'e3-7', type: 'accommodation', time: '20:00', title: '住宿: Residence 高山', desc: '離車站近，有小廚房。訂單: 6171736740-PIN:1772', location: 'Residence Hotel Takayama Station', bookingCode: '6171736740', cost: 55869 },
                 ]
             },
             {
                 id: 'day4', date: '5/13 (三)', title: '高山朝市 → 富山',
                 location: '富山',
-                weather: { icon: 'fa-cloud-sun', text: '移動日', alert: false },
+                weather: { icon: 'fa-cloud-sun', text: '舒適宜人', temp: '14°C ~ 23°C', alert: false },
                 events: [
-                    { id: 'e4-1', type: 'sight', time: '08:00', title: '宮川朝市', desc: '清晨散步，逛市集。', location: '宮川朝市' },
-                    { id: 'e4-2', type: 'transport', time: '14:00', title: '前往富山', desc: 'JR高山本線 (約1.5小時)。', location: '富山車站', cost: 2860 },
-                    { id: 'e4-3', type: 'accommodation', time: '16:00', title: '住宿: 東橫INN 富山站', desc: '新幹線口2號店。訂單: 5361206-7', location: 'Toyoko Inn Toyama-eki Shinkansen-guchi No.2', bookingCode: '5361206-7', cost: 40870 },
-                    { id: 'e4-4', type: 'food', time: '18:00', title: '富山晚餐', desc: '白蝦料理、富山黑拉麵。', location: '富山車站' },
+                    { id: 'e4-1', type: 'sight', time: '08:00', title: '宮川朝市', desc: '日本三大朝市之一，沿著河邊擺攤。\n★必買: 蘋果、手工味噌、朝市布丁。\n早晨空氣很好，適合散步拍照。', location: '宮川朝市' },
+                    { id: 'e4-2', type: 'transport', time: '14:00', title: '前往富山', desc: 'JR高山本線 (特急 Hida)，約1.5小時。沿途峽谷風景秀麗。', location: '富山車站', cost: 2860 },
+                    { id: 'e4-3', type: 'accommodation', time: '16:00', title: '住宿: 東橫INN 富山站', desc: '新幹線口2號店。就在車站旁，方便明天寄行李。', location: 'Toyoko Inn Toyama-eki Shinkansen-guchi No.2', bookingCode: '5361206-7', cost: 40870 },
+                    { id: 'e4-4', type: 'food', time: '18:00', title: '晚餐: 富山灣寶石', desc: '推薦:【白蝦亭 (白えび亭)】位於富山站內。\n★必點: 白蝦刺身丼 (鮮甜！)、白蝦天婦羅。\n或者嘗試【富山黑拉麵 (西町大喜)】，口味偏鹹請注意。', location: '白蝦亭' },
+                    { id: 'e4-5', type: 'sight', time: '20:00', title: '富岩運河環水公園', desc: '擁有「世界最美星巴克」。晚上點燈非常浪漫，適合散步消化。', location: '富岩運河環水公園' },
                 ]
             },
             {
                 id: 'day5', date: '5/14 (四)', title: '穿越立山黑部',
                 location: '長野',
-                weather: { icon: 'fa-snowflake', text: '高山氣候', alert: true },
+                weather: { icon: 'fa-snowflake', text: '高山寒冷', temp: '2°C ~ 10°C', alert: true },
                 events: [
-                    { id: 'e5-1', type: 'transport', time: '07:00', title: '★ 寄行李', desc: '將大行李寄往長野/東京。', location: '富山車站' },
-                    { id: 'e5-2', type: 'transport', time: '08:00', title: '電鐵 富山→立山站', desc: '約1小時。', location: '立山站', cost: 1230 },
-                    { id: 'e5-3', type: 'sight', time: '10:00', title: '立山黑部穿越', desc: '美女平、室堂(雪壁)、大觀峰、黑部水庫。', location: '室堂' },
-                    { id: 'e5-4', type: 'transport', time: '15:00', title: '扇澤 → 長野站', desc: 'ALPICO巴士，約1小時40分。', location: '扇澤站', cost: 2000 },
-                    { id: 'e5-5', type: 'accommodation', time: '18:00', title: '住宿: 長野日航酒店', desc: '或 Sotetsu Fresa。訂單: 6128676866-PIN:0175', location: 'Hotel Jal City Nagano', bookingCode: '6128676866', cost: 36402 },
+                    { id: 'e5-1', type: 'transport', time: '07:00', title: '★ 寄行李', desc: '將大行李寄往長野/東京(當天可能無法到，建議寄到東京)。隨身帶保暖衣物。', location: '富山車站' },
+                    { id: 'e5-2', type: 'transport', time: '08:00', title: '電鐵 富山→立山站', desc: '約1小時。抵達後換乘登山纜車。', location: '立山站', cost: 1230 },
+                    { id: 'e5-3', type: 'sight', time: '10:00', title: '室堂 (雪之大谷)', desc: '海拔2450m。五月仍有壯觀雪壁。\n★必做: 漫步在雪之大谷、去御庫裏池拍倒影。\n午餐推薦: 立山蕎麥麵 (立山站) 或 室堂名物「星之雫」起司蛋糕。', location: '室堂' },
+                    { id: 'e5-4', type: 'sight', time: '13:00', title: '大觀峰 & 黑部水庫', desc: '搭乘空中纜車無支柱設計，景色絕美。\n黑部水庫: 日本最高拱形水庫，爬上展望台視野最好。', location: '黑部水庫' },
+                    { id: 'e5-5', type: 'transport', time: '15:00', title: '扇澤 → 長野站', desc: 'ALPICO巴士，約1小時40分。下山後一路睡到長野。', location: '扇澤站', cost: 2000 },
+                    { id: 'e5-6', type: 'food', time: '18:30', title: '晚餐: 信州味噌拉麵', desc: '推薦:【味噌家 (Misoya)】長野站附近。\n★必點: 叉燒味噌拉麵。使用信州味噌，湯頭濃郁暖胃。', location: 'Misoya Nagano' },
+                    { id: 'e5-7', type: 'accommodation', time: '20:00', title: '住宿: 長野日航酒店', desc: '舒適好睡。訂單: 6128676866-PIN:0175', location: 'Hotel Jal City Nagano', bookingCode: '6128676866', cost: 36402 },
                 ]
             },
             {
                 id: 'day6', date: '5/15 (五)', title: '長野 → 東京',
                 location: '東京',
-                weather: { icon: 'fa-city', text: '都市觀光', alert: false },
+                weather: { icon: 'fa-city', text: '多雲時晴', temp: '18°C ~ 25°C', alert: false },
                 events: [
-                    { id: 'e6-1', type: 'transport', time: '09:00', title: '新幹線 → 東京', desc: '北陸新幹線，約1.5小時。', location: '東京車站', cost: 8000 },
-                    { id: 'e6-2', type: 'sight', time: '13:00', title: '淺草雷門 & 晴空塔', desc: '東京必遊地標。', location: '雷門' },
-                    { id: 'e6-3', type: 'food', time: '18:00', title: '東京晚餐', desc: '上野/淺草美食。', location: '上野' },
-                    { id: 'e6-4', type: 'accommodation', time: '20:00', title: '住宿: 上野第一都市酒店', desc: '訂單: 5038002965-PIN:6928', location: 'Ueno First City Hotel', bookingCode: '5038002965', cost: 63812 },
+                    { id: 'e6-1', type: 'sight', time: '09:00', title: '善光寺 (選)', desc: '如果早起可去。日本重要寺廟，「再遠也要去一次善光寺」。', location: '善光寺' },
+                    { id: 'e6-2', type: 'transport', time: '10:30', title: '新幹線 → 東京', desc: '北陸新幹線 Kagayaki，約1.5小時直達東京。', location: '東京車站', cost: 8000 },
+                    { id: 'e6-3', type: 'sight', time: '13:00', title: '淺草雷門 & 仲見世通', desc: '東京必遊地標。\n★必拍: 雷門大燈籠、晴空塔遠景。\n★小吃: 吉備糰子、人形燒、炸肉餅。', location: '雷門' },
+                    { id: 'e6-4', type: 'food', time: '18:00', title: '晚餐: 鰻魚飯 / 壽喜燒', desc: '推薦:【淺草 今半 (壽喜燒)】需預約，午間套餐較划算。\n或【色川鰻魚飯】炭火現烤。\n預算有限推薦:【宇奈とと】平價鰻魚飯。', location: '淺草 今半' },
+                    { id: 'e6-5', type: 'accommodation', time: '20:00', title: '住宿: 上野第一都市酒店', desc: '交通方便，離阿美橫町近。訂單: 5038002965', location: 'Ueno First City Hotel', bookingCode: '5038002965', cost: 63812 },
                 ]
             },
             {
                 id: 'day7', date: '5/16 (六)', title: '東京自由行',
                 location: '東京',
-                weather: { icon: 'fa-bag-shopping', text: '購物日', alert: false },
+                weather: { icon: 'fa-bag-shopping', text: '逛街日', temp: '19°C ~ 26°C', alert: false },
                 events: [
-                    { id: 'e7-1', type: 'activity', time: '10:00', title: '方案1: 上野動物園', desc: '阿美橫町+淺草雷門。', location: '上野動物園' },
-                    { id: 'e7-2', type: 'activity', time: '10:00', title: '方案2: 晴空塔', desc: '東京晴空塔+押上美食街。', location: '東京晴空塔' },
-                    { id: 'e7-3', type: 'activity', time: '10:00', title: '方案3: 台場一日遊', desc: '樂高探索中心、DiverCity、鋼彈。', location: '台場' },
-                    { id: 'e7-4', type: 'accommodation', time: '20:00', title: '住宿: 成田東武機場酒店', desc: '移動至機場附近。訂單: 5068249636-PIN:5297', location: 'Narita Tobu Hotel Airport', bookingCode: '5068249636', cost: 36086 },
+                    { id: 'e7-1', type: 'activity', time: '10:00', title: '方案1: 上野阿美橫町', desc: '藥妝、零食大採購。\n★必買: 二木之菓子 (伴手禮)、OS Drug (藥妝便宜)。', location: '阿美橫町' },
+                    { id: 'e7-2', type: 'activity', time: '10:00', title: '方案2: 晴空塔 Solamachi', desc: '購物中心超好逛。\n★必逛: 寶可夢中心、吉卜力共和國、Loft。\n午餐推薦:【六厘舍】沾麵 (排隊名店)。', location: '東京晴空塔' },
+                    { id: 'e7-3', type: 'activity', time: '10:00', title: '方案3: 台場 DiverCity', desc: '看獨角獸鋼彈變身。\n★必拍: 自由女神像、彩虹大橋夜景。', location: '台場' },
+                    { id: 'e7-4', type: 'food', time: '18:00', title: '晚餐: 居酒屋體驗', desc: '推薦:【鳥貴族】全品項均一價，平價連鎖串燒。\n★必點: 貴族燒 (雞腿肉蔥串)、釜飯、起司肉丸。', location: '鳥貴族 上野' },
+                    { id: 'e7-5', type: 'accommodation', time: '21:00', title: '住宿: 成田東武機場酒店', desc: '移動至機場附近，方便明早班機。訂單: 5068249636', location: 'Narita Tobu Hotel Airport', bookingCode: '5068249636', cost: 36086 },
                 ]
             },
             {
                 id: 'day8', date: '5/17 (日)', title: '成田 → 高雄',
                 location: '成田',
-                weather: { icon: 'fa-plane-departure', text: '回程', alert: false },
+                weather: { icon: 'fa-plane-departure', text: '多雲', temp: '20°C', alert: false },
                 events: [
-                    { id: 'e8-1', type: 'transport', time: '09:00', title: '前往機場', desc: '飯店接駁車或電車。', location: '成田機場' },
-                    { id: 'e8-2', type: 'activity', time: '10:00', title: '機場採買', desc: '最後衝刺伴手禮。', location: '成田機場免稅店' },
-                    { id: 'e8-3', type: 'transport', time: '13:30', title: 'IT 281 起飛', desc: '成田 → 高雄 (16:40 抵達)。', location: '成田機場第二航廈' },
+                    { id: 'e8-1', type: 'transport', time: '09:00', title: '前往機場', desc: '搭乘飯店免費接駁巴士前往成田 T2。', location: '成田機場' },
+                    { id: 'e8-2', type: 'activity', time: '10:00', title: '機場最後採買', desc: '免稅店掃貨。\n★必買: ROYCE 生巧克力、東京香蕉、LeTAO 起司蛋糕、獺祭二割三。', location: '成田機場免稅店' },
+                    { id: 'e8-3', type: 'food', time: '11:30', title: '午餐: 機場美食', desc: '推薦: T2 4樓美食街。\n想吃好一點可選【壽司田】或簡單吃【麥當勞】(有日本限定口味)。', location: '成田機場第二航廈' },
+                    { id: 'e8-4', type: 'transport', time: '13:30', title: 'IT 281 起飛', desc: '成田 → 高雄 (16:40 抵達)。回家囉！', location: '成田機場第二航廈' },
                 ]
             }
         ];
@@ -271,6 +276,7 @@
             const [bookingCode, setBookingCode] = useState(event.bookingCode || '');
             const [cost, setCost] = useState(event.cost || '');
             const [note, setNote] = useState(event.note || '');
+            const [desc, setDesc] = useState(event.desc || '');
 
             return (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -284,36 +290,35 @@
                                 <input type="text" value={time} onChange={(e) => setTime(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 focus:border-pink-400" />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-400 mb-1 ml-1">標題 (行程/餐廳)</label>
+                                <label className="block text-xs font-bold text-slate-400 mb-1 ml-1">標題</label>
                                 <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 focus:border-pink-400 font-bold text-slate-700" />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-400 mb-1 ml-1">導航地點 (給 Google Maps)</label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-2 text-slate-400"><i className="fa-solid fa-map-pin"></i></span>
-                                    <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl pl-8 pr-3 py-2 focus:border-pink-400" />
+                                <label className="block text-xs font-bold text-slate-400 mb-1 ml-1">詳細說明 (介紹/菜單)</label>
+                                <textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows="3" className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 focus:border-pink-400 text-sm"></textarea>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 mb-1 ml-1">地點</label>
+                                <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 focus:border-pink-400" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-400 mb-1 ml-1">代碼</label>
+                                    <input type="text" value={bookingCode} onChange={(e) => setBookingCode(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 focus:border-pink-400" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-400 mb-1 ml-1">費用</label>
+                                    <input type="number" value={cost} onChange={(e) => setCost(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 focus:border-pink-400" />
                                 </div>
                             </div>
-                            <div className="border-t border-dashed border-slate-200 my-2"></div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-400 mb-1 ml-1">訂位代碼 / 票號</label>
-                                <input type="text" value={bookingCode} onChange={(e) => setBookingCode(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 focus:border-pink-400" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 mb-1 ml-1">費用 (車資/門票)</label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-2 text-slate-400">¥</span>
-                                    <input type="number" value={cost} onChange={(e) => setCost(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl pl-7 pr-3 py-2 focus:border-pink-400" />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 mb-1 ml-1">備註筆記</label>
+                                <label className="block text-xs font-bold text-slate-400 mb-1 ml-1">備註</label>
                                 <textarea value={note} onChange={(e) => setNote(e.target.value)} rows="2" className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 focus:border-pink-400 resize-none"></textarea>
                             </div>
                         </div>
                         <div className="flex gap-3 mt-6">
                             <button onClick={onClose} className="flex-1 py-2.5 rounded-xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors">取消</button>
-                            <button onClick={() => onSave({ title, time, location, bookingCode, cost, note })} className="flex-1 py-2.5 rounded-xl font-bold text-white bg-pink-400 hover:bg-pink-500 shadow-md shadow-pink-200 transition-colors">儲存</button>
+                            <button onClick={() => onSave({ title, time, location, bookingCode, cost, note, desc })} className="flex-1 py-2.5 rounded-xl font-bold text-white bg-pink-400 hover:bg-pink-500 shadow-md shadow-pink-200 transition-colors">儲存</button>
                         </div>
                     </div>
                 </div>
@@ -340,19 +345,21 @@
                         <div className={`relative z-10 w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border-2 border-white shadow-md ${iconBg} ${iconColor}`}>
                             <i className={`fa-solid ${icon} text-sm`}></i>
                         </div>
-                        <div className="flex-1 pt-0.5">
+                        <div className="flex-1 pt-0.5 min-w-0">
                             <div className="flex items-baseline justify-between mb-1">
-                                <span className="font-bold text-slate-700 text-lg">{event.title}</span>
-                                <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">{event.time}</span>
+                                <span className="font-bold text-slate-700 text-lg leading-tight mr-2">{event.title}</span>
+                                <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg whitespace-nowrap">{event.time}</span>
                             </div>
-                            <div className="mb-2">
-                                {event.highlights && event.highlights.map((tag, idx) => (
-                                    <Tag key={`hl-${idx}`} type={tag.type} text={tag.text} />
-                                ))}
+                            <div className="mb-2 flex flex-wrap gap-1">
                                 {event.bookingCode && <Tag type="code" text={`代碼: ${event.bookingCode}`} />}
                                 {event.cost && <Tag type="cost" text={`¥${event.cost}`} />}
                             </div>
-                            <p className="text-sm text-slate-500 leading-relaxed mb-2">{event.desc}</p>
+                            
+                            {/* 描述區域優化：支援換行顯示 */}
+                            <p className="text-sm text-slate-500 leading-relaxed mb-2 whitespace-pre-line bg-white/50 p-2 rounded-lg border border-slate-100">
+                                {event.desc}
+                            </p>
+                            
                             {event.note && (
                                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 text-xs text-yellow-800 mb-2">
                                     <i className="fa-regular fa-note-sticky mr-1"></i> {event.note}
@@ -392,12 +399,16 @@
                     </div>
                     {isExpanded && (
                         <div>
+                            {/* 天氣與氣溫 Bar */}
                             <div className={`mx-4 px-4 py-3 rounded-xl flex items-center justify-between text-sm font-bold border-2 ${day.weather.alert ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-sky-50 text-sky-600 border-sky-100'}`}>
                                 <div className="flex items-center gap-2">
                                     <i className={`fa-solid ${day.weather.icon} text-lg`}></i>
                                     <span>{day.weather.text}</span>
                                 </div>
-                                {day.weather.alert && <span className="text-[10px] bg-amber-200 text-amber-800 px-2 py-1 rounded-full animate-bounce">注意</span>}
+                                <div className="flex items-center gap-2">
+                                    {day.weather.temp && <span className="bg-white/60 px-2 py-0.5 rounded text-xs"><i className="fa-solid fa-temperature-half mr-1"></i>{day.weather.temp}</span>}
+                                    {day.weather.alert && <span className="text-[10px] bg-amber-200 text-amber-800 px-2 py-1 rounded-full animate-bounce">注意</span>}
+                                </div>
                             </div>
                             <div className="p-4">
                                 {day.events.map((event, index) => (
@@ -412,7 +423,6 @@
         };
 
         const ToolsView = ({ daysData, budgetData, onUpdateBudget, onResetData }) => {
-            // 計算從行程中輸入的總費用
             const itineraryCost = daysData.reduce((total, day) => {
                 return total + day.events.reduce((dayTotal, event) => {
                     return dayTotal + (parseInt(event.cost) || 0);
@@ -456,8 +466,8 @@
                                 <i className="fa-solid fa-coins text-yellow-400"></i> 預算錢包
                              </h3>
                              <button onClick={resetBudget} className="text-xs text-slate-400 hover:text-pink-500 font-bold bg-slate-100 px-2 py-1 rounded-lg">重置手動</button>
-                         </div>
-                        
+                          </div>
+                         
                         <div className="mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                             <div className="flex justify-between text-sm mb-2">
                                 <span className="text-slate-500 font-bold">已支出 (行程+手動)</span>
@@ -476,7 +486,6 @@
                             <button onClick={() => updateManualSpent(5000)} className="btn-cute py-3 bg-white text-slate-600 border-2 border-slate-100 hover:border-pink-200 hover:text-pink-500">+¥5,000</button>
                             <button onClick={() => updateManualSpent(10000)} className="btn-cute py-3 bg-white text-slate-600 border-2 border-slate-100 hover:border-pink-200 hover:text-pink-500">+¥10,000</button>
                         </div>
-                        <div className="mt-3 text-[10px] text-center text-slate-400">*編輯行程中的費用會自動加總喔！</div>
                     </div>
 
                     <div className="app-card p-6 border-blue-100">
@@ -495,13 +504,12 @@
                         </div>
                     </div>
 
-                    {/* 資料重置區 */}
                     <div className="mt-8 border-t border-slate-200 pt-6">
                         <button onClick={onResetData} className="w-full py-3 bg-rose-50 text-rose-500 font-bold rounded-2xl border-2 border-rose-100 hover:bg-rose-100 active:scale-95 transition-all flex items-center justify-center gap-2">
                             <i className="fa-solid fa-rotate-right"></i>
-                            ⚠️ 強制重置為「北陸東京」行程 (覆蓋舊檔)
+                            ⚠️ 強制重置為「v2.7 詳細版」行程
                         </button>
-                        <p className="text-center text-[10px] text-slate-400 mt-2">如果看到的資料還是舊的，請按此按鈕</p>
+                        <p className="text-center text-[10px] text-slate-400 mt-2">更新程式碼後，請務必按此按鈕載入新資料</p>
                     </div>
                 </div>
             );
@@ -515,15 +523,11 @@
             const [isLoading, setIsLoading] = useState(true);
             const [isLocalMode, setIsLocalMode] = useState(false);
 
-            // 初始化與認證邏輯
             useEffect(() => {
                 const initAuth = async () => {
-                    // 1. 檢查是否為本地開發/未填寫 Key 的狀態
                     if (firebaseConfig.apiKey === "你的_API_KEY") {
-                        console.warn("偵測到未設定 Firebase Key，切換為本地模式 (Local Storage)。");
+                        console.warn("Local Mode Active");
                         setIsLocalMode(true);
-                        
-                        // 本地模式：直接讀取 LocalStorage
                         const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
                         if (savedData) {
                             const data = JSON.parse(savedData);
@@ -536,7 +540,6 @@
                         return;
                     }
 
-                    // 2. 嘗試 Firebase 登入
                     try {
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                             await signInWithCustomToken(auth, __initial_auth_token);
@@ -544,8 +547,7 @@
                             await signInAnonymously(auth);
                         }
                     } catch (error) {
-                        console.error("Firebase Auth 錯誤:", error);
-                        // 登入失敗也切回本地模式，避免畫面卡住
+                        console.error("Auth Error:", error);
                         setIsLocalMode(true);
                         setDays(defaultItinerary);
                         setIsLoading(false);
@@ -554,10 +556,8 @@
 
                 initAuth();
 
-                // 3. 監聽登入狀態 (僅在非本地模式下)
                 const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
                     if (user && firebaseConfig.apiKey !== "你的_API_KEY") {
-                        // 使用正確的 Public Data 路徑: artifacts/appId/public/data/trips/shared_japan_2025
                         const docRef = doc(db, ...TRIP_DOC_PATH);
                         
                         try {
@@ -579,7 +579,7 @@
                             });
                             return () => unsubscribeSnapshot();
                         } catch (e) {
-                            console.error("Firestore 讀取錯誤:", e);
+                            console.error("Firestore Error:", e);
                             setIsLocalMode(true);
                             setDays(defaultItinerary);
                             setIsLoading(false);
@@ -590,19 +590,16 @@
                 return () => unsubscribeAuth();
             }, []);
 
-            // 強制重置資料 (清除雲端舊檔)
             const handleResetData = async () => {
-                if (!confirm("確定要重置嗎？這會覆蓋掉雲端上目前的舊行程，變回預設的「北陸東京」行程。")) return;
+                if (!confirm("確定要重置嗎？這會清除目前的修改，並載入包含「天氣、詳細景點、美食推薦」的 v2.7 版行程。")) return;
                 
                 const newBudget = { total: 200000, manualSpent: 0 };
-                // 1. 先更新畫面
                 setDays(defaultItinerary);
                 setBudget(newBudget);
 
-                // 2. 更新儲存 (本地或雲端)
                 if (isLocalMode) {
                     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ days: defaultItinerary, budget: newBudget }));
-                    alert("本地資料已重置！");
+                    alert("本地資料已更新 v2.7！");
                 } else {
                     try {
                         const docRef = doc(db, ...TRIP_DOC_PATH);
@@ -610,15 +607,14 @@
                             days: defaultItinerary, 
                             budget: newBudget 
                         });
-                        alert("雲端資料已成功重置為新行程！");
+                        alert("雲端資料已成功升級為 v2.7！");
                     } catch (e) {
-                        console.error("重置失敗:", e);
-                        alert("重置失敗，請檢查網路或權限。");
+                        console.error("Reset Error:", e);
+                        alert("重置失敗，請檢查網路。");
                     }
                 }
             };
 
-            // 更新事件
             const handleUpdateEvent = async (dayId, eventId, newData) => {
                 if (!days) return;
                 
@@ -642,12 +638,11 @@
                         const docRef = doc(db, ...TRIP_DOC_PATH);
                         await updateDoc(docRef, { days: updatedDays });
                     } catch (e) {
-                        console.error("更新失敗:", e);
+                        console.error("Update Error:", e);
                     }
                 }
             };
 
-            // 更新預算
             const handleUpdateBudget = async (newBudget) => {
                 setBudget(newBudget);
                 
@@ -658,7 +653,7 @@
                         const docRef = doc(db, ...TRIP_DOC_PATH);
                         await updateDoc(docRef, { budget: newBudget });
                     } catch (e) {
-                        console.error("預算更新失敗:", e);
+                        console.error("Budget Error:", e);
                     }
                 }
             };
@@ -678,10 +673,9 @@
 
             return (
                 <div className="max-w-md mx-auto min-h-screen bg-[#fff1f2] overflow-x-hidden">
-                    {/* v2.6 成功通知橫幅 */}
-                    <div className="bg-indigo-500 text-white text-xs font-bold text-center py-2 px-4 shadow-md animate-pulse sticky top-0 z-50">
+                    <div className="bg-emerald-500 text-white text-xs font-bold text-center py-2 px-4 shadow-md sticky top-0 z-50">
                         <i className="fa-solid fa-check-circle mr-1"></i>
-                        版本 2.6 更新成功！ (請至工具頁重置雲端資料)
+                        v2.7 升級成功：請至工具頁「強制重置」以載入新內容
                     </div>
 
                     <header className="sticky top-8 z-40 bg-[#fff1f2]/90 backdrop-blur-md px-5 py-4 border-b-2 border-pink-100 flex justify-between items-center shadow-sm">
@@ -714,7 +708,7 @@
                                     />
                                 ))}
                                 <div className="text-center text-pink-300 font-bold text-sm mt-8 mb-4">
-                                    ~ 旅途愉快 v2.6 (雲端重置版) ~
+                                    ~ 旅途愉快 v2.7 詳細版 ~
                                 </div>
                             </div>
                         ) : (
