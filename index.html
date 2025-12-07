@@ -8,7 +8,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     
-    <title>Chiikawa Trip v2.5</title>
+    <title>Chiikawa Trip v2.6</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#fff1f2">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1908/1908344.png">
@@ -84,31 +84,23 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
         // =========================================
-        // 🚑 PWA 殺手程式碼 v3 (安全版 - 防止報錯)
+        // 🚑 PWA 殺手程式碼 v3 (安全版)
         // =========================================
         if ('serviceWorker' in navigator) {
             try {
                 navigator.serviceWorker.getRegistrations().then(function(registrations) {
                     for(let registration of registrations) {
-                        registration.unregister().then(function() {
-                            console.log('Service Worker 已強制註銷 (v2.5)');
-                        }).catch(err => console.warn('SW Unregister failed:', err));
+                        registration.unregister().catch(err => console.warn(err));
                     }
-                }).catch(err => {
-                    console.warn('SW getRegistrations failed:', err);
-                });
-            } catch (e) {
-                console.warn('Service Worker access denied or invalid state:', e);
-            }
+                }).catch(err => console.warn(err));
+            } catch (e) { console.warn(e); }
 
             if ('caches' in window) {
                 try {
                     caches.keys().then(function(names) {
                         for (let name of names) caches.delete(name);
-                    }).catch(err => console.warn('Cache clear failed:', err));
-                } catch (e) {
-                    console.warn('Cache access denied:', e);
-                }
+                    }).catch(err => console.warn(err));
+                } catch (e) { console.warn(e); }
             }
         }
 
@@ -141,15 +133,12 @@
         const db = getFirestore(app);
         const auth = getAuth(app);
 
-        // 路徑: artifacts/{appId}/public/data/trips/shared_japan_2025
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const TRIP_DOC_PATH = ['artifacts', appId, 'public', 'data', 'trips', 'shared_japan_2025'];
-        
-        // 🌟 關鍵修改：更換儲存金鑰，強制讀取新資料
-        const LOCAL_STORAGE_KEY = 'trip_data_v2_5'; 
+        const LOCAL_STORAGE_KEY = 'trip_data_v2_6'; 
 
         // =========================================
-        // 新版資料結構 (根據使用者上傳的 CSV 整合)
+        // 新版資料結構 (北陸東京 8 天)
         // =========================================
         const defaultItinerary = [
             {
@@ -422,7 +411,7 @@
             );
         };
 
-        const ToolsView = ({ daysData, budgetData, onUpdateBudget }) => {
+        const ToolsView = ({ daysData, budgetData, onUpdateBudget, onResetData }) => {
             // 計算從行程中輸入的總費用
             const itineraryCost = daysData.reduce((total, day) => {
                 return total + day.events.reduce((dayTotal, event) => {
@@ -504,6 +493,15 @@
                                 <span className="font-mono font-bold text-slate-700 select-all">+81-3-3280-7811</span>
                             </div>
                         </div>
+                    </div>
+
+                    {/* 資料重置區 */}
+                    <div className="mt-8 border-t border-slate-200 pt-6">
+                        <button onClick={onResetData} className="w-full py-3 bg-rose-50 text-rose-500 font-bold rounded-2xl border-2 border-rose-100 hover:bg-rose-100 active:scale-95 transition-all flex items-center justify-center gap-2">
+                            <i className="fa-solid fa-rotate-right"></i>
+                            ⚠️ 強制重置為「北陸東京」行程 (覆蓋舊檔)
+                        </button>
+                        <p className="text-center text-[10px] text-slate-400 mt-2">如果看到的資料還是舊的，請按此按鈕</p>
                     </div>
                 </div>
             );
@@ -592,6 +590,34 @@
                 return () => unsubscribeAuth();
             }, []);
 
+            // 強制重置資料 (清除雲端舊檔)
+            const handleResetData = async () => {
+                if (!confirm("確定要重置嗎？這會覆蓋掉雲端上目前的舊行程，變回預設的「北陸東京」行程。")) return;
+                
+                const newBudget = { total: 200000, manualSpent: 0 };
+                // 1. 先更新畫面
+                setDays(defaultItinerary);
+                setBudget(newBudget);
+
+                // 2. 更新儲存 (本地或雲端)
+                if (isLocalMode) {
+                    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ days: defaultItinerary, budget: newBudget }));
+                    alert("本地資料已重置！");
+                } else {
+                    try {
+                        const docRef = doc(db, ...TRIP_DOC_PATH);
+                        await setDoc(docRef, { 
+                            days: defaultItinerary, 
+                            budget: newBudget 
+                        });
+                        alert("雲端資料已成功重置為新行程！");
+                    } catch (e) {
+                        console.error("重置失敗:", e);
+                        alert("重置失敗，請檢查網路或權限。");
+                    }
+                }
+            };
+
             // 更新事件
             const handleUpdateEvent = async (dayId, eventId, newData) => {
                 if (!days) return;
@@ -652,15 +678,15 @@
 
             return (
                 <div className="max-w-md mx-auto min-h-screen bg-[#fff1f2] overflow-x-hidden">
-                    {/* v2.5 成功通知橫幅 (確保更新可見) */}
-                    <div className="bg-purple-500 text-white text-xs font-bold text-center py-2 px-4 shadow-md animate-pulse sticky top-0 z-50">
+                    {/* v2.6 成功通知橫幅 */}
+                    <div className="bg-indigo-500 text-white text-xs font-bold text-center py-2 px-4 shadow-md animate-pulse sticky top-0 z-50">
                         <i className="fa-solid fa-check-circle mr-1"></i>
-                        版本 2.5 更新成功！ (資料已重置)
+                        版本 2.6 更新成功！ (請至工具頁重置雲端資料)
                     </div>
 
                     <header className="sticky top-8 z-40 bg-[#fff1f2]/90 backdrop-blur-md px-5 py-4 border-b-2 border-pink-100 flex justify-between items-center shadow-sm">
                         <h1 className="text-2xl font-black text-slate-700 tracking-tight flex items-center gap-2">
-                            <span className="text-pink-500 text-3xl">✨</span> {/* 改成閃亮符號以便確認 */}
+                            <span className="text-pink-500 text-3xl">✨</span> 
                             <span>Japan<span className="text-pink-400">Trip</span></span>
                         </h1>
                         <div className="w-10 h-10 rounded-full bg-white border-2 border-pink-200 flex items-center justify-center shadow-sm">
@@ -688,11 +714,16 @@
                                     />
                                 ))}
                                 <div className="text-center text-pink-300 font-bold text-sm mt-8 mb-4">
-                                    ~ 旅途愉快 v2.5 (重置版) ~
+                                    ~ 旅途愉快 v2.6 (雲端重置版) ~
                                 </div>
                             </div>
                         ) : (
-                            <ToolsView daysData={days || []} budgetData={budget} onUpdateBudget={handleUpdateBudget} />
+                            <ToolsView 
+                                daysData={days || []} 
+                                budgetData={budget} 
+                                onUpdateBudget={handleUpdateBudget} 
+                                onResetData={handleResetData}
+                            />
                         )}
                     </main>
 
