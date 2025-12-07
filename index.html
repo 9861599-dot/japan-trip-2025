@@ -3,7 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Chiikawa Trip</title>
+    <!-- 強力防止快取的 Meta 標籤 -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    
+    <title>Chiikawa Trip v2.4</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#fff1f2">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1908/1908344.png">
@@ -77,6 +82,37 @@
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc, collection } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+
+        // =========================================
+        // 🚑 PWA 殺手程式碼 v3 (安全版 - 防止報錯)
+        // =========================================
+        if ('serviceWorker' in navigator) {
+            // 使用 try-catch 包裹，避免在不支援的環境下(如 iframe)報錯導致白畫面
+            try {
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                    for(let registration of registrations) {
+                        registration.unregister().then(function() {
+                            console.log('Service Worker 已強制註銷 (v2.4)');
+                        }).catch(err => console.warn('SW Unregister failed:', err));
+                    }
+                }).catch(err => {
+                    console.warn('SW getRegistrations failed:', err);
+                });
+            } catch (e) {
+                console.warn('Service Worker access denied or invalid state:', e);
+            }
+
+            // 嘗試清除快取儲存
+            if ('caches' in window) {
+                try {
+                    caches.keys().then(function(names) {
+                        for (let name of names) caches.delete(name);
+                    }).catch(err => console.warn('Cache clear failed:', err));
+                } catch (e) {
+                    console.warn('Cache access denied:', e);
+                }
+            }
+        }
 
         const { useState, useEffect, useRef } = React;
 
@@ -615,9 +651,15 @@
 
             return (
                 <div className="max-w-md mx-auto min-h-screen bg-[#fff1f2] overflow-x-hidden">
-                    <header className="sticky top-0 z-40 bg-[#fff1f2]/90 backdrop-blur-md px-5 py-4 border-b-2 border-pink-100 flex justify-between items-center shadow-sm">
+                    {/* v2.3 成功通知橫幅 (確保更新可見) */}
+                    <div className="bg-emerald-500 text-white text-xs font-bold text-center py-2 px-4 shadow-md animate-pulse sticky top-0 z-50">
+                        <i className="fa-solid fa-check-circle mr-1"></i>
+                        版本 2.3 更新成功！ (快取已清除)
+                    </div>
+
+                    <header className="sticky top-8 z-40 bg-[#fff1f2]/90 backdrop-blur-md px-5 py-4 border-b-2 border-pink-100 flex justify-between items-center shadow-sm">
                         <h1 className="text-2xl font-black text-slate-700 tracking-tight flex items-center gap-2">
-                            <span className="text-pink-500 text-3xl">✈️</span>
+                            <span className="text-pink-500 text-3xl">✨</span> {/* 改成閃亮符號以便確認 */}
                             <span>Japan<span className="text-pink-400">Trip</span></span>
                         </h1>
                         <div className="w-10 h-10 rounded-full bg-white border-2 border-pink-200 flex items-center justify-center shadow-sm">
@@ -645,7 +687,7 @@
                                     />
                                 ))}
                                 <div className="text-center text-pink-300 font-bold text-sm mt-8 mb-4">
-                                    ~ 旅途愉快 ~
+                                    ~ 旅途愉快 v2.3 ~
                                 </div>
                             </div>
                         ) : (
